@@ -39,4 +39,13 @@ describe('dictionaries', () => {
     expect(t('pl').caged.subtitle).toContain('E A D G B E');
     expect(t('en').caged.subtitle).toContain('E A D G B E');
   });
+
+  it('pl and en templates use the same placeholders', () => {
+    const pl = flatten(t('pl'));
+    const en = flatten(t('en'));
+    const names = (value: unknown) => [...String(value).matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
+    for (const key of Object.keys(pl)) {
+      expect(names(en[key]), key).toEqual(names(pl[key]));
+    }
+  });
 });

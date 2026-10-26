@@ -40,10 +40,10 @@ export const en: Dict = {
     facts: [
       {
         title: 'How to read it',
-        body: 'Colour is the shape. The R dot is the root (the chord’s name), 3 is the major third, 5 is the fifth. The same colour in two places is the same shape repeated 12 frets higher.',
+        body: 'Color is the shape. The R dot is the root (the chord’s name), 3 is the major third, 5 is the fifth. The same color in two places is the same shape repeated 12 frets higher.',
       },
       {
-        title: 'Moving rule',
+        title: 'Moving a shape',
         body: 'The shape moves together with its root. The E shape with its root on the 5th fret of the low E string is an A chord; with the root on the 3rd fret it is a G chord.',
       },
       {
@@ -67,7 +67,7 @@ export const en: Dict = {
     orderRepeat: '(12 frets higher)',
     band: 'shape {shape}',
     tileFrets: 'frets {from}–{to}',
-    tileGrip: 'grip (E→e):',
+    tileGrip: 'fingering (E→e):',
     tileRoot: 'root:',
     boardAria: 'The five CAGED shapes of the {key} major chord on frets 0 to {max}',
     boardRegionAria: 'Fretboard of the {key} major chord',
