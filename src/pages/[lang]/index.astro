@@ -1,0 +1,41 @@
+---
+import Site from '../../layouts/Site.astro';
+import { LANGS, t, type Lang } from '../../i18n';
+import { PAGES } from '../../pages';
+
+export function getStaticPaths() {
+  return LANGS.map((lang) => ({ params: { lang } }));
+}
+
+const lang = Astro.params.lang as Lang;
+const dict = t(lang);
+---
+<Site lang={lang} title={dict.site.name} slug="">
+  <h1>{dict.site.name}</h1>
+  <p class="intro">{dict.home.intro}</p>
+  <ul class="tiles">
+    {PAGES.map((p) => (
+      <li>
+        <a href={`/${lang}/${p.slug}`}>
+          <strong>{p.title[lang]}</strong>
+          <span>{p.blurb[lang]}</span>
+        </a>
+      </li>
+    ))}
+  </ul>
+</Site>
+
+<style>
+  .intro { color: var(--muted); margin: 0 0 20px; }
+  .tiles {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px;
+    list-style: none; margin: 0; padding: 0;
+  }
+  .tiles a {
+    display: block; height: 100%; padding: 14px 16px; text-decoration: none;
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  }
+  .tiles a:hover { border-color: var(--muted); }
+  .tiles strong { display: block; font-size: 1.05rem; margin-bottom: 4px; }
+  .tiles span { display: block; font-size: .9rem; color: var(--muted); }
+</style>

@@ -1,0 +1,34 @@
+---
+// Unprefixed URL (`/`, `/caged`): send the visitor to `/<lang>/<slug>`, see lib/lang.ts.
+// Adding a stub for a new page = `<RedirectStub slug="<page>" />` in src/pages/<page>.astro.
+import { LANGS, t } from '../i18n';
+import { redirectScript } from '../lib/lang';
+import '../styles/tokens.css';
+
+interface Props {
+  /** Path after the language prefix ('' for home). */
+  slug: string;
+}
+const { slug } = Astro.props;
+const href = (lang: string) => `/${lang}/${slug}`;
+---
+<html lang="pl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>{t('pl').site.name} · {t('en').site.name}</title>
+    {LANGS.map((l) => <link rel="alternate" hreflang={l} href={new URL(href(l), Astro.site)} />)}
+    <script is:inline set:html={redirectScript(slug)} />
+  </head>
+  <body>
+    <main>
+      <noscript>
+        <p>{t('pl').stub.chooseLanguage} / {t('en').stub.chooseLanguage}:</p>
+        <ul>
+          {LANGS.map((l) => <li><a href={href(l)} hreflang={l} lang={l}>{t(l).langName[l]}</a></li>)}
+        </ul>
+      </noscript>
+    </main>
+  </body>
+</html>

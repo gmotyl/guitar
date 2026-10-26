@@ -1,0 +1,25 @@
+/* Design tokens and base styles from the mockup
+   (projects/gitara/mockups/2026-10-26-caged-piec-akordow-c-a-g-e-d.html). */
+:root {
+  --bg: #faf8f4; --fg: #1f1d1a; --muted: #6b665e; --card: #ffffff; --line: #d9d3c8;
+  --wood: #efe4d0; --fret: #9a8f7e; --string: #7d7466; --nut: #3b362f; --on: #ffffff;
+  --c: #dc2626; --a: #ea580c; --g: #16a34a; --e: #2563eb; --d: #9333ea;
+  --accent: #1f1d1a; --focus: #2563eb;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #161513; --fg: #ece8e1; --muted: #a39d93; --card: #1f1e1b; --line: #3a3732;
+    --wood: #2b2620; --fret: #7a7062; --string: #8f8576; --nut: #d6cfc3; --on: #161513;
+    --c: #f87171; --a: #fb923c; --g: #4ade80; --e: #60a5fa; --d: #c084fc;
+    --accent: #ece8e1; --focus: #93c5fd;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+h1 { font-size: 1.6rem; margin: 0 0 4px; }
+p, li { max-width: 75ch; }
+a { color: inherit; }
+a:focus-visible, button:focus-visible, .scroll:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
