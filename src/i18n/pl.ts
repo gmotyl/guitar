@@ -46,7 +46,7 @@ export const pl = {
       },
       {
         title: 'Zasada przesuwania',
-        body: 'Kształt przesuwasz razem z primą. Kształt E z primą na 5. progu struny E to akord A, z primą na 3. progu to akord G.',
+        body: 'Kształt przesuwasz razem z prymą. Kształt E z prymą na 5. progu struny E to akord A, z prymą na 3. progu to akord G.',
       },
       {
         title: 'Dur → moll',
