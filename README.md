@@ -17,3 +17,5 @@ corepack pnpm preview   # serve dist/
 corepack pnpm test      # unit tests (Vitest)
 corepack pnpm e2e       # end-to-end tests (Playwright)
 ```
+
+E2E: set `PW_CHROMIUM_PATH` to a local Chromium binary if `playwright install` is unavailable.
