@@ -16,6 +16,7 @@ const href = (lang: string) => `/${lang}/${slug}`;
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="robots" content="noindex" />
     <title>{t('pl').site.name} · {t('en').site.name}</title>
     {LANGS.map((l) => <link rel="alternate" hreflang={l} href={new URL(href(l), Astro.site)} />)}
