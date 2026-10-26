@@ -33,6 +33,20 @@ describe('Menu', () => {
     expect(document.activeElement).toBe(button);
   });
 
+  it('menu closes on a second activation of the button', () => {
+    renderMenu('en', 'caged');
+    const button = screen.getByRole('button', { name: 'Open menu' });
+    const panel = document.getElementById(button.getAttribute('aria-controls')!)!;
+
+    fireEvent.click(button);
+    expect(panel.hidden).toBe(false);
+
+    fireEvent.click(button);
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    expect(button.getAttribute('aria-label')).toBe('Open menu');
+    expect(panel.hidden).toBe(true);
+  });
+
   it('menu lists registry pages and links the switch to the same page in the other language', () => {
     renderMenu('en', 'caged');
     fireEvent.click(screen.getByRole('button', { name: 'Open menu' }));

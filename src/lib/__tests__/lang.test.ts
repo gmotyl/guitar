@@ -24,7 +24,10 @@ describe('lang', () => {
   it('pickLang maps pl browsers to pl and everything else to en', () => {
     expect(pickLang(null, 'pl-PL')).toBe('pl');
     expect(pickLang(null, 'pl')).toBe('pl');
+    expect(pickLang(null, 'PL-pl')).toBe('pl');
     expect(pickLang(null, 'de-DE')).toBe('en');
+    expect(pickLang(null, 'pt-BR')).toBe('en');
+    expect(pickLang(null, 'plx')).toBe('en');
     expect(pickLang(null, undefined)).toBe('en');
   });
 
@@ -41,6 +44,12 @@ describe('lang', () => {
     const stored = { getItem: () => 'en', setItem: () => {} };
     run(stored, { language: 'pl-PL' }, { replace });
     expect(replace).toHaveBeenLastCalledWith('/en/caged');
+
+    const empty = { getItem: () => null, setItem: () => {} };
+    run(empty, { language: 'pt-BR' }, { replace });
+    expect(replace).toHaveBeenLastCalledWith('/en/caged');
+    run(empty, { language: 'pl' }, { replace });
+    expect(replace).toHaveBeenLastCalledWith('/pl/caged');
 
     vi.unstubAllGlobals();
     storeLang('en');
