@@ -22,6 +22,21 @@ describe('caged', () => {
     expect(copies.map((v) => [v.shape, ...range(v.frets)])).toEqual([['C', 12, 15]]);
   });
 
+  it('pins open-position voicings with a +12 copy for keys other than C', () => {
+    const at = (keyPc: number, shape: string) =>
+      voicings(keyPc)
+        .filter((v) => v.shape === shape)
+        .map((v) => [v.copy, ...range(v.frets)]);
+    expect(at(2, 'D')).toEqual([
+      [false, 0, 3],
+      [true, 12, 15],
+    ]);
+    expect(at(9, 'A')).toEqual([
+      [false, 0, 2],
+      [true, 12, 14],
+    ]);
+  });
+
   it('keeps every voicing of every key within frets 0 to 15', () => {
     for (const { pc } of KEYS) {
       const vs = voicings(pc);
