@@ -80,6 +80,21 @@ describe('CagedExplorer', () => {
     );
   });
 
+  it('shared notes show the shape drawn last in the mockup', () => {
+    const { container } = renderExplorer();
+    const board = cards(container)[0].querySelector('.board--h svg')!;
+    const top = (string: number, fret: number) => {
+      const at = board.querySelectorAll(`[data-role="dot"][data-string="${string}"][data-fret="${fret}"]`);
+      return Array.from(at).map((n) => n.getAttribute('data-group'));
+    };
+    // The mockup draws C's +12 copy first, then D on top (e12, G12, B13).
+    expect(top(0, 12)).toEqual(['C', 'D']);
+    expect(top(2, 12)).toEqual(['C', 'D']);
+    expect(top(1, 13)).toEqual(['C', 'D']);
+    const dot = board.querySelectorAll('[data-role="dot"][data-string="0"][data-fret="12"] circle')[1];
+    expect(dot.getAttribute('stroke')).toBe('var(--d)');
+  });
+
   it('chord filter shows only the picked card and presses its chip', () => {
     const { container } = renderExplorer();
     fireEvent.click(chip(chordGroup(), 'G'));

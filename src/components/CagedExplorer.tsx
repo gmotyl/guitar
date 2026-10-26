@@ -32,8 +32,11 @@ interface Chord {
 
 function buildChords(t: Dict['caged']): Chord[] {
   return KEYS.map(({ key, pc }) => {
-    const all = [...voicings(pc, MAX_FRET)].sort((a, b) => lowest(a) - lowest(b));
-    const dots = all.flatMap((v) =>
+    // Template order (C A G E D, each +12 copy right after its shape): later dots draw on top,
+    // so shared notes show the same colour as the mockup.
+    const drawn = voicings(pc, MAX_FRET);
+    const all = [...drawn].sort((a, b) => lowest(a) - lowest(b));
+    const dots = drawn.flatMap((v) =>
       v.frets.flatMap((fret, string): FretDot[] => {
         if (fret == null) return [];
         const r = role(semitonesFromRoot(TUNING[string].pc, fret, pc));

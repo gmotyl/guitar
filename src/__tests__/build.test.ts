@@ -154,6 +154,15 @@ describe('caged page build output', () => {
     }
   });
 
+  it('legend dots: R filled, 3 outlined on the card, 5 muted', () => {
+    const css = cssOf('pl/caged/index.html');
+    const decl = (sel: string) => rules(css, sel).join(';');
+    expect(decl('.dot--root')).toMatch(/(^|;)background:var\(--fg\)/);
+    expect(decl('.dot--third')).toMatch(/(^|;)background:var\(--card\)/);
+    expect(decl('.dot--third')).toMatch(/(^|;)border:2pxsolidvar\(--fg\)/);
+    expect(decl('.dot--fifth')).toMatch(/(^|;)background:var\(--muted\)/);
+  });
+
   it('english page has no polish strings', () => {
     const body = text(doc('en/caged/index.html').body);
     for (const pl of ['kształt', 'Akord', 'progi', 'pryma', 'dźwięki', 'siodełka', 'chwyt', 'wszystkie', 'Tonacja']) {

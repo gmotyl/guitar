@@ -218,7 +218,14 @@ export function Fretboard({ orientation, frets = 15, dots, bands = [], dimmedGro
           const [x, y] = g.xy(g.cellAt(d.fret), g.stringAt(d.string));
           const fill = d.variant === 'filled' ? d.color : d.variant === 'outline' ? 'var(--card)' : 'var(--muted)';
           return (
-            <g key={`d${i}`} data-role="dot" data-group={d.group} opacity={opacityFor(d.group, dimmedGroups)}>
+            <g
+              key={`d${i}`}
+              data-role="dot"
+              data-group={d.group}
+              data-string={d.string}
+              data-fret={d.fret}
+              opacity={opacityFor(d.group, dimmedGroups)}
+            >
               <circle cx={x} cy={y} r={11.5} fill={fill} stroke={d.color} stroke-width={2.5} />
               <text
                 x={x}
