@@ -15,7 +15,6 @@ h2 small { font-size: .9rem; font-weight: 500; color: var(--muted); }
 .chips button { font: inherit; font-size: .9rem; min-width: 2.6em; padding: 4px 10px; border-radius: 999px;
   border: 1px solid var(--line); background: var(--card); color: var(--fg); cursor: pointer; }
 .chips button[aria-pressed="true"] { background: var(--sc, var(--accent)); border-color: var(--sc, var(--accent)); color: var(--on); }
-.chips button:focus-visible, .board:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 
 .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .88rem; color: var(--muted); margin: 0 0 18px; }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }

@@ -115,6 +115,45 @@ describe('caged page build output', () => {
     expect(css).toMatch(/@media\(orientation:portrait\)\{.*\.board--v\{display:block/);
   });
 
+  /** Declaration bodies of every rule whose selector list contains `selector` (CSS is whitespace-free). */
+  const rules = (css: string, selector: string) =>
+    Array.from(css.matchAll(/([^{}]+)\{([^{}]*)\}/g))
+      .filter((m) => m[1].split(',').includes(selector))
+      .map((m) => m[2]);
+
+  it('controls bar sticks to the top', () => {
+    const body = rules(cssOf('pl/caged/index.html'), '.controls').join(';');
+    expect(body).toMatch(/(^|;)position:sticky(;|$)/);
+    expect(body).toMatch(/(^|;)top:0(px)?(;|$)/);
+  });
+
+  it('dark scheme overrides the mockup tokens', () => {
+    const css = cssOf('pl/caged/index.html');
+    const dark = css.match(/@media\(prefers-color-scheme:dark\)\{:root\{([^}]*)\}/)?.[1] ?? '';
+    const tokens = Object.fromEntries(dark.split(';').map((d) => d.split(':')));
+    expect(tokens).toMatchObject({
+      '--bg': '#161513',
+      '--fg': '#ece8e1',
+      '--card': '#1f1e1b',
+      '--c': '#f87171',
+      '--a': '#fb923c',
+      '--g': '#4ade80',
+      '--e': '#60a5fa',
+      '--d': '#c084fc',
+    });
+  });
+
+  it('chips and boards get the focus ring', () => {
+    const css = cssOf('pl/caged/index.html');
+    const d = doc('pl/caged/index.html');
+    expect(d.querySelectorAll('main .board.scroll')).toHaveLength(10);
+    for (const sel of ['button:focus-visible', '.scroll:focus-visible']) {
+      const body = rules(css, sel).join(';');
+      expect(body, sel).toMatch(/outline:3pxsolidvar\(--focus\)/);
+      expect(body, sel).toMatch(/outline-offset:2px/);
+    }
+  });
+
   it('english page has no polish strings', () => {
     const body = text(doc('en/caged/index.html').body);
     for (const pl of ['kształt', 'Akord', 'progi', 'pryma', 'dźwięki', 'siodełka', 'chwyt', 'wszystkie', 'Tonacja']) {
