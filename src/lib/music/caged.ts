@@ -39,13 +39,13 @@ type Frets = (number | null)[];
 const played = (fr: Frets) => fr.filter((f): f is number => f != null);
 const shift = (fr: Frets, d: number) => fr.map((f) => (f == null ? null : f + d));
 
-/** Place every shape of a key on frets 0..maxFret, adding the +12 copy when it fits. */
+/** Place every shape of a key on frets 0..maxFret (shapes that do not fit are omitted), adding the +12 copy when it fits. */
 export function voicings(keyPc: PitchClass, maxFret = 15): Voicing[] {
   const out: Voicing[] = [];
   SHAPES.forEach((s, order) => {
     let fr = shift(s.frets, keyPc);
     while (Math.min(...played(fr)) >= 12) fr = shift(fr, -12);
-    if (Math.max(...played(fr)) > maxFret && Math.min(...played(fr)) - 12 >= 0) fr = shift(fr, -12);
+    if (Math.max(...played(fr)) > maxFret) return;
     out.push({ shape: s.key, color: s.color, order, frets: fr, copy: false });
     const up = shift(fr, 12);
     if (Math.max(...played(up)) <= maxFret) out.push({ shape: s.key, color: s.color, order, frets: up, copy: true });

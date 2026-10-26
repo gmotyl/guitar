@@ -49,6 +49,12 @@ describe('caged', () => {
     }
   });
 
+  it('keeps every voicing within a smaller maxFret', () => {
+    const vs = voicings(0, 12);
+    for (const v of vs) expect(range(v.frets)[1]).toBeLessThanOrEqual(12);
+    expect(vs.some((v) => v.shape === 'D')).toBe(false);
+  });
+
   it('classifies every played note as R, 3 or 5', () => {
     for (const { pc } of KEYS) {
       for (const v of voicings(pc)) {
