@@ -84,6 +84,23 @@ describe('caged page build output', () => {
     }
   });
 
+  it('offers page and language links without JavaScript', () => {
+    for (const [lang, other] of [
+      ['pl', 'en'],
+      ['en', 'pl'],
+    ]) {
+      const d = doc(`${lang}/caged/index.html`);
+      const noscript = d.querySelector('header.site-header noscript');
+      expect(noscript, lang).not.toBeNull();
+      const visible = Array.from(noscript!.querySelectorAll('a'))
+        .filter((a) => !a.closest('[hidden]'))
+        .map((a) => a.getAttribute('href'));
+      expect(visible, lang).toContain(`/${other}/caged`);
+      expect(visible, lang).toContain(`/${lang}/`);
+      expect(visible, lang).toContain(`/${lang}/caged`);
+    }
+  });
+
   it('subtitle names the tuning E A D G B E', () => {
     for (const lang of ['pl', 'en']) {
       const d = doc(`${lang}/caged/index.html`);

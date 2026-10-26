@@ -2,6 +2,7 @@
 import { LANGS, t, type Lang } from '../i18n';
 import { Menu } from '../components/Menu';
 import Footer from '../components/Footer.astro';
+import { PAGES } from '../pages';
 import '../styles/tokens.css';
 
 interface Props {
@@ -29,6 +30,18 @@ const url = (prefix: string) => new URL(`${prefix}/${slug}`, Astro.site).href;
     <header class="site-header">
       <a class="site-name" href={`/${lang}/`}>{dict.site.name}</a>
       <Menu client:load lang={lang} slug={slug} labels={dict.menu} langNames={dict.langName} />
+      <noscript>
+        <style is:inline>.menu { display: none; }</style>
+        <nav class="menu-noscript" aria-label={dict.menu.pages}>
+          <a href={`/${lang}/`} aria-current={slug === '' ? 'page' : undefined}>{dict.menu.home}</a>
+          {PAGES.map((p) => (
+            <a href={`/${lang}/${p.slug}`} aria-current={slug === p.slug ? 'page' : undefined}>{p.title[lang]}</a>
+          ))}
+          {LANGS.filter((l) => l !== lang).map((l) => (
+            <a href={`/${l}/${slug}`} hreflang={l} lang={l}>{dict.langName[l]}</a>
+          ))}
+        </nav>
+      </noscript>
     </header>
     <main>
       <slot />
@@ -60,4 +73,6 @@ const url = (prefix: string) => new URL(`${prefix}/${slug}`, Astro.site).href;
   .menu-panel a[aria-current="page"] { font-weight: 700; }
   .menu-lang { display: flex; gap: 4px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); }
   .menu-lang span { font-weight: 700; background: var(--accent); color: var(--on); }
+  .menu-noscript { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: .9rem; }
+  .menu-noscript a[aria-current="page"] { font-weight: 700; }
 </style>
