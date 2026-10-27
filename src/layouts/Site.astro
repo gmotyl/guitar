@@ -1,0 +1,78 @@
+---
+import { LANGS, t, type Lang } from '../i18n';
+import { Menu } from '../components/Menu';
+import Footer from '../components/Footer.astro';
+import { PAGES } from '../pages';
+import '../styles/tokens.css';
+
+interface Props {
+  lang: Lang;
+  title: string;
+  /** Path after the language prefix ('' for home). */
+  slug: string;
+}
+const { lang, title, slug } = Astro.props;
+const dict = t(lang);
+const url = (prefix: string) => new URL(`${prefix}/${slug}`, Astro.site).href;
+---
+<html lang={lang}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="description" content={dict.site.description} />
+    <title>{title}</title>
+    <link rel="canonical" href={url(`/${lang}`)} />
+    {LANGS.map((l) => <link rel="alternate" hreflang={l} href={url(`/${l}`)} />)}
+    <link rel="alternate" hreflang="x-default" href={url('')} />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="site-name" href={`/${lang}/`}>{dict.site.name}</a>
+      <Menu client:load lang={lang} slug={slug} labels={dict.menu} langNames={dict.langName} />
+      <noscript>
+        <style is:inline>.menu { display: none; }</style>
+        <nav class="menu-noscript" aria-label={dict.menu.pages}>
+          <a href={`/${lang}/`} aria-current={slug === '' ? 'page' : undefined}>{dict.menu.home}</a>
+          {PAGES.map((p) => (
+            <a href={`/${lang}/${p.slug}`} aria-current={slug === p.slug ? 'page' : undefined}>{p.title[lang]}</a>
+          ))}
+          {LANGS.filter((l) => l !== lang).map((l) => (
+            <a href={`/${l}/${slug}`} hreflang={l} lang={l}>{dict.langName[l]}</a>
+          ))}
+        </nav>
+      </noscript>
+    </header>
+    <main>
+      <slot />
+    </main>
+    <Footer lang={lang} />
+  </body>
+</html>
+
+<style is:global>
+  .site-header {
+    position: relative; display: flex; align-items: center; justify-content: space-between;
+    max-width: 1100px; margin: 0 auto; padding: 8px 16px; border-bottom: 1px solid var(--line);
+  }
+  .site-name { font-weight: 700; font-size: 1.05rem; text-decoration: none; }
+  .menu-button {
+    display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px;
+    border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--fg); cursor: pointer;
+  }
+  .menu-button svg { stroke: currentColor; stroke-width: 2; stroke-linecap: round; fill: none; }
+  .menu-panel {
+    position: absolute; z-index: 10; top: calc(100% + 4px); right: 16px; left: 16px;
+    max-width: 320px; margin-left: auto; padding: 8px; background: var(--card);
+    border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 24px rgb(0 0 0 / .15);
+  }
+  .menu-panel[hidden] { display: none; }
+  .menu-panel ul { list-style: none; margin: 0; padding: 0; }
+  .menu-panel a, .menu-lang span { display: block; padding: 10px 12px; border-radius: 8px; text-decoration: none; }
+  .menu-panel a:hover { background: var(--bg); }
+  .menu-panel a[aria-current="page"] { font-weight: 700; }
+  .menu-lang { display: flex; gap: 4px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); }
+  .menu-lang span { font-weight: 700; background: var(--accent); color: var(--on); }
+  .menu-noscript { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: .9rem; }
+  .menu-noscript a[aria-current="page"] { font-weight: 700; }
+</style>

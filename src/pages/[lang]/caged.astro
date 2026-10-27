@@ -1,0 +1,23 @@
+---
+import Site from '../../layouts/Site.astro';
+import { CagedExplorer } from '../../components/CagedExplorer';
+import { LANGS, t, type Lang } from '../../i18n';
+import '../../components/caged.css';
+
+export function getStaticPaths() {
+  return LANGS.map((lang) => ({ params: { lang } }));
+}
+
+const lang = Astro.params.lang as Lang;
+const dict = t(lang);
+---
+<Site lang={lang} title={dict.caged.title} slug="caged">
+  <h1>{dict.caged.title}</h1>
+  <p class="sub">{dict.caged.subtitle}</p>
+  <ul class="facts">
+    {dict.caged.facts.map((f) => (
+      <li><b>{f.title}</b>{f.body}</li>
+    ))}
+  </ul>
+  <CagedExplorer client:load lang={lang} t={dict.caged} />
+</Site>

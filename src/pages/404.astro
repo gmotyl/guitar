@@ -1,0 +1,27 @@
+---
+// Root 404 served by Workers static assets (`not_found_handling: "404-page"`); bilingual, no menu.
+import Footer from '../components/Footer.astro';
+import { LANGS, t } from '../i18n';
+import '../styles/tokens.css';
+---
+<html lang="pl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="robots" content="noindex" />
+    <title>404 · {t('pl').notFound.title}</title>
+  </head>
+  <body>
+    <main>
+      {LANGS.map((l) => (
+        <section lang={l}>
+          <h1>{t(l).notFound.title}</h1>
+          <p>{t(l).notFound.body}</p>
+          <p><a href={`/${l}/`}>{t(l).notFound.back}</a></p>
+        </section>
+      ))}
+    </main>
+    <Footer lang="pl" />
+  </body>
+</html>

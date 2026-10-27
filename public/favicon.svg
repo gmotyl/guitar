@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- A fret segment with one dot per CAGED shape colour. -->
+  <rect x="1" y="1" width="30" height="30" rx="7" fill="#efe4d0"/>
+  <path d="M6 2v28M26 2v28" stroke="#3b362f" stroke-width="3"/>
+  <path d="M6 7h20M6 12.5h20M6 18h20M6 23.5h20" stroke="#7d7466" stroke-width="1.2"/>
+  <circle cx="11" cy="7" r="3" fill="#dc2626"/>
+  <circle cx="21" cy="12.5" r="3" fill="#ea580c"/>
+  <circle cx="11" cy="18" r="3" fill="#16a34a"/>
+  <circle cx="21" cy="23.5" r="3" fill="#2563eb"/>
+  <circle cx="16" cy="28" r="2.4" fill="#9333ea"/>
+</svg>
