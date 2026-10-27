@@ -31,6 +31,26 @@ describe('lang', () => {
     expect(pickLang(null, undefined)).toBe('en');
   });
 
+  it('pickLang defaults to pl on the gitara host unless a choice is stored', () => {
+    expect(pickLang(null, 'en-US', 'gitara.motyl.dev')).toBe('pl');
+    expect(pickLang('en', 'en-US', 'gitara.motyl.dev')).toBe('en');
+    expect(pickLang(null, 'en-US', 'guitar.motyl.dev')).toBe('en');
+    expect(pickLang(null, 'en-US', 'mygitara.dev')).toBe('en');
+  });
+
+  it('redirect stub sends en browsers on the gitara host to pl', () => {
+    const run = new Function('localStorage', 'navigator', 'location', redirectScript('caged'));
+    const empty = { getItem: () => null, setItem: () => {} };
+    const replace = vi.fn();
+    run(empty, { language: 'en-US' }, { hostname: 'gitara.motyl.dev', replace });
+    expect(replace).toHaveBeenLastCalledWith('/pl/caged');
+    run(empty, { language: 'en-US' }, { hostname: 'guitar.motyl.dev', replace });
+    expect(replace).toHaveBeenLastCalledWith('/en/caged');
+    const stored = { getItem: () => 'en', setItem: () => {} };
+    run(stored, { language: 'en-US' }, { hostname: 'gitara.motyl.dev', replace });
+    expect(replace).toHaveBeenLastCalledWith('/en/caged');
+  });
+
   it('storeLang survives a throwing localStorage', () => {
     vi.stubGlobal('localStorage', throwingStorage);
     expect(() => storeLang('pl')).not.toThrow();

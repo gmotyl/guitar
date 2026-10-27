@@ -1,5 +1,7 @@
 {
   "name": "guitar",
   "compatibility_date": "2026-10-01",
-  "assets": { "directory": "./dist", "not_found_handling": "404-page" }
+  "assets": { "directory": "./dist", "not_found_handling": "404-page" },
+  // Required by `wrangler preview`, the Workers Builds command for non-main branches.
+  "previews": {}
 }
