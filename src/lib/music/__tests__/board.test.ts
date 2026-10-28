@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildBoard, type ExplorerState } from '../board';
-import type { Key } from '../keys';
+import { chordName, keyChords, type Key } from '../keys';
 import { TUNING, semitonesFromRoot } from '../notes';
 import { PENTATONIC, boxes } from '../scales';
 
@@ -84,6 +84,8 @@ describe('board', () => {
       expect(d.colors).toEqual(['var(--k0)', 'var(--k2)']);
       expect(d.variant).toBe('filled');
       expect(d.ring).toBe(true);
+      // Am (slot 0) is the lowest-index chord, so its role names the shared tone.
+      expect(d.label).toBe('R');
     }
     // G is a plain scale note.
     for (const d of byPc(7)) expect(d).toMatchObject({ variant: 'outline', label: 'b7' });
@@ -126,5 +128,32 @@ describe('board', () => {
     // A major chord labels its third '3'.
     const c = buildBoard(state({ chords: new Set([1]) })).dots; // III = C major
     expect(at(c, LOW_E, 0)).toMatchObject({ label: '3', variant: 'filled', color: 'var(--k1)' });
+  });
+
+  it('buildBoard: major key labels degrees and colours one chord', () => {
+    const C_MAJOR: Key = { root: 0, quality: 'major' };
+    const plain = buildBoard(state({ key: C_MAJOR })).dots;
+    expect([...new Set(plain.map((d) => d.label))].sort()).toEqual(['2', '3', '5', '6', 'R']);
+    expect(at(plain, LOW_E, 8)).toMatchObject({ label: 'R', ring: true, variant: 'outline' });
+    expect(at(plain, LOW_E, 0)).toMatchObject({ label: '3' });
+    expect(at(plain, LOW_E, 5)).toMatchObject({ label: '6' });
+    expect(at(plain, LOW_E, 1)).toBeUndefined(); // F is not in C major pentatonic
+
+    const kc = keyChords(C_MAJOR);
+    expect(kc.map((c) => `${c.degree} ${chordName(c, C_MAJOR)}`)).toEqual(['I C', 'ii Dm', 'iii Em', 'IV F', 'V G', 'vi Am']);
+    const VI = kc.find((c) => c.degree === 'vi')!.index;
+
+    const { dots } = buildBoard(state({ key: C_MAJOR, chords: new Set([VI]) }));
+    const colour = `var(--k${VI})`;
+    const am = dots.filter((d) => d.colors !== undefined);
+    // Am = A C E: every A, C and E on the neck, nothing else.
+    expect(new Set(am.map((d) => pcAt(d.string, d.fret)))).toEqual(new Set([9, 0, 4]));
+    for (const d of am) expect(d).toMatchObject({ colors: [colour], variant: 'filled' });
+    expect(at(dots, LOW_E, 5)).toMatchObject({ label: 'R', color: colour });
+    expect(at(dots, LOW_E, 8)).toMatchObject({ label: 'b3', ring: true, color: colour });
+    expect(at(dots, LOW_E, 0)).toMatchObject({ label: '5', color: colour });
+    // G stays a plain scale note with its major degree label.
+    expect(at(dots, LOW_E, 3)).toMatchObject({ label: '5', variant: 'outline' });
+    expect(at(dots, LOW_E, 3)!.colors).toBeUndefined();
   });
 });
