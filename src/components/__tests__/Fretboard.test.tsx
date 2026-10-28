@@ -230,3 +230,134 @@ describe('Fretboard', () => {
     }
   });
 });
+
+describe('Fretboard overlays', () => {
+  const box = [
+    [0, 5], [0, 8], [1, 5], [1, 8],
+  ].map(([string, fret]) => ({ string, fret }));
+
+  it('dims an outline by its own flag or by dimmedGroups', () => {
+    const { container } = render(
+      <Fretboard
+        orientation="horizontal"
+        dots={[]}
+        outlines={[
+          { group: '1', color: 'var(--e)', cells: box, dimmed: true },
+          { group: '2', color: 'var(--d)', cells: box },
+          { group: '3', color: 'var(--c)', cells: box },
+        ]}
+        dimmedGroups={['2']}
+        ariaLabel="b"
+      />,
+    );
+    expect(all(container, 'outline').map((o) => o.getAttribute('opacity'))).toEqual(['0.12', '0.12', '1']);
+  });
+
+  it('renders a single-colour dot as a plain filled circle', () => {
+    const { container } = render(
+      <Fretboard
+        orientation="horizontal"
+        dots={[{ string: 2, fret: 5, label: 'R', color: 'var(--k0)', colors: ['var(--k3)'], variant: 'filled' }]}
+        ariaLabel="b"
+      />,
+    );
+    const dot = all(container, 'dot')[0];
+    expect(dot.querySelectorAll('[data-role="slice"]')).toHaveLength(0);
+    const circles = dot.querySelectorAll('circle');
+    expect(circles).toHaveLength(1);
+    expect(circles[0].getAttribute('fill')).toBe('var(--k3)');
+  });
+
+  it('splits into slices only for filled dots', () => {
+    const colors = ['var(--k0)', 'var(--k1)'];
+    const { container } = render(
+      <Fretboard
+        orientation="horizontal"
+        dots={[
+          { string: 0, fret: 5, label: 'R', color: 'var(--k0)', colors, variant: 'filled' },
+          { string: 1, fret: 5, label: '3', color: 'var(--k0)', colors, variant: 'outline' },
+          { string: 2, fret: 5, label: 'b3', color: 'var(--k0)', colors, variant: 'dashed' },
+          { string: 3, fret: 5, label: '5', color: 'var(--k0)', colors, variant: 'muted' },
+        ]}
+        ariaLabel="b"
+      />,
+    );
+    expect(all(container, 'dot').map((d) => d.querySelectorAll('[data-role="slice"]').length)).toEqual([2, 0, 0, 0]);
+  });
+
+  it('fills a dashed dot with the card colour and labels it in the dot colour', () => {
+    const { container } = render(
+      <Fretboard
+        orientation="horizontal"
+        dots={[{ string: 2, fret: 6, label: 'b3', color: 'var(--k2)', variant: 'dashed' }]}
+        ariaLabel="b"
+      />,
+    );
+    const dot = all(container, 'dot')[0];
+    expect(dot.querySelector('circle')!.getAttribute('fill')).toBe('var(--card)');
+    expect(dot.querySelector('text')!.getAttribute('fill')).toBe('var(--k2)');
+  });
+
+  it('strokes the root ring in the foreground colour', () => {
+    const { container } = render(
+      <Fretboard
+        orientation="horizontal"
+        dots={[{ string: 0, fret: 5, label: 'R', color: 'var(--muted)', variant: 'outline', ring: true }]}
+        ariaLabel="b"
+      />,
+    );
+    expect(container.querySelector('[data-role="ring"]')!.getAttribute('stroke')).toBe('var(--fg)');
+  });
+
+  it('steps the outline low-fret side string by string', () => {
+    // Lowest fret per string: e 5, B 6, G 7, D 4.
+    const cells = [
+      [0, 5], [0, 8], [1, 6], [1, 8], [2, 7], [2, 9], [3, 4], [3, 7],
+    ].map(([string, fret]) => ({ string, fret }));
+    const lows = [5, 6, 7, 4];
+    for (const orientation of ['horizontal', 'vertical'] as const) {
+      const { container } = render(
+        <Fretboard
+          orientation={orientation}
+          dots={cells.map((c) => ({ ...c, label: '', color: 'var(--c)', variant: 'outline' as const }))}
+          outlines={[{ group: '1', color: 'var(--c)', cells }]}
+          ariaLabel="b"
+        />,
+      );
+      const pts = all(container, 'outline')[0]
+        .getAttribute('points')!
+        .trim()
+        .split(/\s+/)
+        .map((p) => p.split(',').map(Number));
+      const h = orientation === 'horizontal';
+      const dotAt = (string: number, fret: number) =>
+        all(container, 'dot')
+          .find((d) => d.getAttribute('data-string') === String(string) && d.getAttribute('data-fret') === String(fret))!
+          .querySelector('circle')!;
+      const along = (c: Element) => num(c, h ? 'cx' : 'cy');
+      const across = (c: Element) => num(c, h ? 'cy' : 'cx');
+      // Low-fret edge on each string's line, measured from the lowest dot on that string.
+      const offsets = lows.map((lo, s) => {
+        const d = dotAt(s, lo);
+        const edge = Math.min(...pts.filter((p) => (h ? p[1] : p[0]) === across(d)).map((p) => (h ? p[0] : p[1])));
+        return along(d) - edge;
+      });
+      // The edge follows every string's own lowest note by the same padding.
+      expect(offsets[0]).toBeGreaterThan(0);
+      for (const o of offsets) expect(o).toBeCloseTo(offsets[0], 1);
+    }
+  });
+
+  it('draws nothing for an outline without cells', () => {
+    const { container } = render(
+      <Fretboard
+        orientation="horizontal"
+        dots={[]}
+        outlines={[{ group: '1', color: 'var(--c)', cells: [] }]}
+        ariaLabel="b"
+      />,
+    );
+    expect(all(container, 'outline')).toHaveLength(0);
+    expect(container.querySelectorAll('polygon')).toHaveLength(0);
+  });
+});
