@@ -1,7 +1,7 @@
 import { useState } from 'preact/hooks';
 import { format, type Dict, type Lang } from '../i18n';
 import { KEYS, SHAPES, chordTones, role, shapeSummary, voicings, type ShapeKey, type Voicing } from '../lib/music/caged';
-import type { Key } from '../lib/music/keys';
+import type { Key, Quality } from '../lib/music/keys';
 import { TUNING, semitonesFromRoot, type PitchClass } from '../lib/music/notes';
 import { Fretboard, type FretBand, type FretDot } from './Fretboard';
 
@@ -20,11 +20,14 @@ const cssVar = (name: string) => `var(${name})`;
 const lowest = (v: Voicing) => Math.min(...v.frets.filter((f): f is number => f != null));
 
 const VARIANT = { R: 'filled', '3': 'outline', b3: 'outline', '5': 'muted' } as const;
+const QUALITIES: readonly Quality[] = ['minor', 'major'];
+/** Shapes too stretched to fret in full; their tiles carry a note. */
+const HARD_SHAPES: Record<Quality, readonly ShapeKey[]> = { major: [], minor: ['C', 'G'] };
 
 interface Chord {
   key: ShapeKey;
   pc: PitchClass;
-  /** The chord as a key (major until the minor switch lands). */
+  /** The chord as a key: its root plus the selected quality. */
   k: Key;
   tones: string;
   /** Every voicing on the board, sorted by lowest fret (board order). */
@@ -35,9 +38,9 @@ interface Chord {
   bands: FretBand[];
 }
 
-function buildChords(t: Dict['caged']): Chord[] {
+function buildChords(t: Dict['caged'], quality: Quality): Chord[] {
   return KEYS.map(({ key, pc }) => {
-    const k: Key = { root: pc, quality: 'major' };
+    const k: Key = { root: pc, quality };
     // Template order (C A G E D, each +12 copy right after its shape): later dots draw on top,
     // so shared notes show the same colour as the mockup.
     const drawn = voicings(k, MAX_FRET);
@@ -61,7 +64,9 @@ function buildChords(t: Dict['caged']): Chord[] {
 export function CagedExplorer({ t }: CagedExplorerProps) {
   const [selKey, setSelKey] = useState<ShapeKey | null>(null);
   const [selShape, setSelShape] = useState<ShapeKey | null>(null);
-  const chords = buildChords(t);
+  const [quality, setQuality] = useState<Quality>('major');
+  const minor = quality === 'minor';
+  const chords = buildChords(t, quality);
   const dimmed = selShape ? SHAPE_KEYS.filter((k) => k !== selShape) : [];
   const shapeColor = Object.fromEntries(SHAPE_LIST.map((s) => [s.key, cssVar(s.color)])) as Record<ShapeKey, string>;
 
@@ -89,18 +94,22 @@ export function CagedExplorer({ t }: CagedExplorerProps) {
           {chip(t.all, selShape === null, () => setSelShape(null))}
           {SHAPE_LIST.map((s) => chip(s.key, selShape === s.key, () => setSelShape(s.key), cssVar(s.color)))}
         </div>
+        <div class="chips" role="group" aria-label={t.quality.groupAria}>
+          <span class="lbl">{t.quality.label}</span>
+          {QUALITIES.map((q) => chip(t.quality[q], quality === q, () => setQuality(q)))}
+        </div>
       </div>
 
       <div class="legend">
         <span><i class="dot dot--root" />{t.legend.root}</span>
-        <span><i class="dot dot--third" />{t.legend.third}</span>
+        <span><i class="dot dot--third" />{minor ? t.legend.thirdMinor : t.legend.third}</span>
         <span><i class="dot dot--fifth" />{t.legend.fifth}</span>
       </div>
 
       {chords.map((c) => (
         <section class="card" data-key={c.key} hidden={selKey !== null && selKey !== c.key} key={c.key}>
           <h2>
-            {format(t.chordHeading, { key: c.key })} <small>{t.tones} {c.tones}</small>
+            {format(minor ? t.chordHeadingMinor : t.chordHeading, { key: c.key })} <small>{t.tones} {c.tones}</small>
           </h2>
           <p class="order">
             {t.order}{' '}
@@ -117,7 +126,7 @@ export function CagedExplorer({ t }: CagedExplorerProps) {
               class={`board scroll board--${orientation[0]}`}
               tabIndex={0}
               role="region"
-              aria-label={format(t.boardRegionAria, { key: c.key })}
+              aria-label={format(minor ? t.boardRegionAriaMinor : t.boardRegionAria, { key: c.key })}
             >
               <Fretboard
                 orientation={orientation}
@@ -125,7 +134,7 @@ export function CagedExplorer({ t }: CagedExplorerProps) {
                 dots={c.dots}
                 bands={c.bands}
                 dimmedGroups={dimmed}
-                ariaLabel={format(t.boardAria, { key: c.key, max: MAX_FRET })}
+                ariaLabel={format(minor ? t.boardAriaMinor : t.boardAria, { key: c.key, max: MAX_FRET })}
               />
             </div>
           ))}
@@ -146,6 +155,7 @@ export function CagedExplorer({ t }: CagedExplorerProps) {
                     <br />
                     {t.tileRoot} {s.roots.join(', ')}
                   </p>
+                  {HARD_SHAPES[quality].includes(v.shape) && <p class="hard">{t.hardShape}</p>}
                 </div>
               );
             })}

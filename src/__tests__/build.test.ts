@@ -182,7 +182,7 @@ describe('caged page build output', () => {
 
   it('english page has no polish strings', () => {
     const body = text(doc('en/caged/index.html').body);
-    for (const pl of ['kształt', 'Akord', 'progi', 'pryma', 'dźwięki', 'siodełka', 'chwyt', 'wszystkie', 'Tonacja']) {
+    for (const pl of ['kształt', 'Akord', 'progi', 'pryma', 'dźwięki', 'siodełka', 'chwyt', 'wszystkie', 'Tonacja', 'moll', 'Tryb', 'trudny']) {
       expect(body, pl).not.toContain(pl);
     }
     expect(body).toContain('shape E');
@@ -201,7 +201,7 @@ describe('caged page build output', () => {
         expect(c.querySelectorAll('.shape-card')).toHaveLength(5);
         expect(c.querySelectorAll('.board--h [data-role="dot"]').length).toBeGreaterThan(20);
       }
-      expect(d.querySelectorAll('.controls button')).toHaveLength(12);
+      expect(d.querySelectorAll('.controls button')).toHaveLength(14);
     }
     expect(readdirSync(join(DIST, 'pl', 'caged'))).toContain('index.html');
   });

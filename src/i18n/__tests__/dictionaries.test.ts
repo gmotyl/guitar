@@ -48,4 +48,22 @@ describe('dictionaries', () => {
       expect(names(en[key]), key).toEqual(names(pl[key]));
     }
   });
+
+  it('dictionaries: caged quality strings exist in pl and en', () => {
+    const pl = t('pl').caged;
+    const en = t('en').caged;
+    expect([pl.quality.minor, pl.quality.major]).toEqual(['moll', 'dur']);
+    expect([en.quality.minor, en.quality.major]).toEqual(['minor', 'major']);
+    expect(pl.quality.label).toBe('Tryb:');
+    expect(en.quality.label).toBe('Quality:');
+    expect(pl.legend.thirdMinor).toBe('b3 — tercja mała');
+    expect(en.legend.thirdMinor).toBe('b3 — minor third');
+    expect(pl.hardShape).toBe('trudny do zagrania w całości — zwykle grany częściowo');
+    expect(en.hardShape).toBe('hard to play in full — usually played in part');
+    for (const d of [pl, en]) {
+      expect(d.chordHeadingMinor).toContain('{key}m');
+      expect(d.boardAriaMinor).toContain('{max}');
+      expect(d.boardRegionAriaMinor).toContain('{key}');
+    }
+  });
 });
