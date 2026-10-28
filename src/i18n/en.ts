@@ -12,6 +12,7 @@ export const en: Dict = {
     pages: 'Pages',
     language: 'Language',
     home: 'Home',
+    wakeLock: 'Keep screen on',
   },
   langName: {
     pl: 'Polski',

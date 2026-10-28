@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { LANGS, type Dict, type Lang } from '../i18n';
 import { storeLang } from '../lib/lang';
+import {
+  disableWakeLock,
+  enableWakeLock,
+  isWakeLockSupported,
+  setWakeLockPreference,
+  wakeLockPreference,
+} from '../lib/wakeLock';
 import { PAGES } from '../pages';
 
 export interface MenuProps {
@@ -17,6 +24,26 @@ export function Menu({ lang, slug, labels, langNames }: MenuProps) {
   const [open, setOpen] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
+  // Off until mounted: the server render has no navigator, so the switch appears after hydration.
+  const [wakeSupported, setWakeSupported] = useState(false);
+  const [wakeOn, setWakeOn] = useState(false);
+
+  useEffect(() => {
+    if (!isWakeLockSupported()) return;
+    const on = wakeLockPreference() === 'on';
+    setWakeSupported(true);
+    setWakeOn(on);
+    if (on) enableWakeLock();
+    return disableWakeLock;
+  }, []);
+
+  const toggleWake = () => {
+    const on = !wakeOn;
+    setWakeOn(on);
+    setWakeLockPreference(on ? 'on' : 'off');
+    if (on) enableWakeLock();
+    else disableWakeLock();
+  };
 
   const close = (returnFocus: boolean) => {
     setOpen(false);
@@ -90,6 +117,16 @@ export function Menu({ lang, slug, labels, langNames }: MenuProps) {
             ),
           )}
         </div>
+        {wakeSupported && (
+          <button
+            type="button"
+            class="menu-switch"
+            aria-pressed={wakeOn ? 'true' : 'false'}
+            onClick={toggleWake}
+          >
+            {labels.wakeLock}
+          </button>
+        )}
       </div>
     </div>
   );

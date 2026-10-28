@@ -73,6 +73,17 @@ const url = (prefix: string) => new URL(`${prefix}/${slug}`, Astro.site).href;
   .menu-panel a[aria-current="page"] { font-weight: 700; }
   .menu-lang { display: flex; gap: 4px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); }
   .menu-lang span { font-weight: 700; background: var(--accent); color: var(--on); }
+  .menu-switch {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%;
+    margin-top: 6px; padding: 10px 12px; border: 0; border-top: 1px solid var(--line);
+    background: none; color: var(--fg); font: inherit; text-align: left; cursor: pointer;
+  }
+  .menu-switch:hover { background: var(--bg); }
+  .menu-switch::after {
+    content: ""; flex: none; width: 14px; height: 14px; border-radius: 50%;
+    border: 2px solid var(--line); background: var(--card);
+  }
+  .menu-switch[aria-pressed="true"]::after { border-color: var(--accent); background: var(--accent); }
   .menu-noscript { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: .9rem; }
   .menu-noscript a[aria-current="page"] { font-weight: 700; }
 </style>

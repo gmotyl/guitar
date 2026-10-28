@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/preact';
 import { Menu } from '../Menu';
 import { PAGES } from '../../pages';
@@ -10,6 +10,8 @@ const renderMenu = (lang: 'pl' | 'en', slug: string) =>
 describe('Menu', () => {
   afterEach(() => {
     cleanup();
+    Reflect.deleteProperty(navigator, 'wakeLock');
+    vi.unstubAllGlobals();
     localStorage.clear();
   });
 
@@ -64,5 +66,79 @@ describe('Menu', () => {
     other.addEventListener('click', (e) => e.preventDefault()); // keep jsdom from navigating
     fireEvent.click(other);
     expect(localStorage.getItem('guitar.lang')).toBe('pl');
+  });
+
+  describe('wake lock switch', () => {
+    // Let pending request() promises settle.
+    const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+    const mockWakeLock = () => {
+      const release = vi.fn(() => Promise.resolve());
+      const request = vi.fn(() => Promise.resolve({ release }));
+      Object.defineProperty(navigator, 'wakeLock', { value: { request }, configurable: true });
+      return { request, release };
+    };
+
+    it('Menu: switch toggles and stores preference', async () => {
+      const { request, release } = mockWakeLock();
+      renderMenu('en', 'caged');
+      await flush();
+      expect(request).toHaveBeenCalledWith('screen');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Open menu' }));
+      const toggle = screen.getByRole('button', { name: 'Keep screen on' });
+      expect(toggle.getAttribute('aria-pressed')).toBe('true');
+
+      fireEvent.click(toggle);
+      expect(release).toHaveBeenCalledTimes(1);
+      expect(localStorage.getItem('guitar.wakeLock')).toBe('off');
+      expect(toggle.getAttribute('aria-pressed')).toBe('false');
+
+      fireEvent.click(toggle);
+      await flush();
+      expect(request).toHaveBeenCalledTimes(2);
+      expect(localStorage.getItem('guitar.wakeLock')).toBe('on');
+      expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    });
+
+    it('Menu: stored off makes no request', async () => {
+      localStorage.setItem('guitar.wakeLock', 'off');
+      const { request } = mockWakeLock();
+      renderMenu('pl', 'caged');
+      await flush();
+      expect(request).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Otwórz menu' }));
+      const toggle = screen.getByRole('button', { name: 'Ekran nie gaśnie' });
+      expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    });
+
+    it('Menu: no switch without wakeLock API', () => {
+      expect('wakeLock' in navigator).toBe(false);
+      expect(() => renderMenu('en', 'caged')).not.toThrow();
+      fireEvent.click(screen.getByRole('button', { name: 'Open menu' }));
+      expect(screen.queryByRole('button', { name: 'Keep screen on' })).toBeNull();
+    });
+
+    it('Menu: storage throwing still requests the lock', async () => {
+      const getItem = vi.fn(() => {
+        throw new Error('denied');
+      });
+      const setItem = vi.fn(() => {
+        throw new Error('denied');
+      });
+      vi.stubGlobal('localStorage', { getItem, setItem, clear: () => {} });
+      const { request } = mockWakeLock();
+      expect(() => renderMenu('en', 'caged')).not.toThrow();
+      await flush();
+      expect(getItem).toHaveBeenCalledWith('guitar.wakeLock');
+      expect(request).toHaveBeenCalledWith('screen');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Open menu' }));
+      const toggle = screen.getByRole('button', { name: 'Keep screen on' });
+      expect(() => fireEvent.click(toggle)).not.toThrow();
+      expect(setItem).toHaveBeenCalledWith('guitar.wakeLock', 'off');
+      expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    });
   });
 });

@@ -14,6 +14,7 @@ export const pl = {
     pages: 'Strony',
     language: 'Język',
     home: 'Strona główna',
+    wakeLock: 'Ekran nie gaśnie',
   },
   langName: {
     pl: 'Polski',
