@@ -16,4 +16,12 @@ export const PAGES: readonly SitePage[] = [
       en: 'The five CAGED shapes for the C, A, G, E and D chords up to the 15th fret.',
     },
   },
+  {
+    slug: 'pentatonic',
+    title: { pl: 'Pentatonika', en: 'The pentatonic scale' },
+    blurb: {
+      pl: 'Pięć pudełek pentatoniki molowej i durowej z nałożonymi akordami tonacji.',
+      en: 'The five boxes of the minor and major pentatonic with the key chords on top.',
+    },
+  },
 ];

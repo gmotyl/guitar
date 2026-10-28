@@ -76,4 +76,15 @@ describe('dictionaries', () => {
       expect(d.boardRegionAriaMinor).toContain('{key}');
     }
   });
+
+  it('dictionaries: pentatonic strings in pl and en', () => {
+    const pl = t('pl').pentatonic;
+    const en = t('en').pentatonic;
+    expect([pl.quality.minor, pl.quality.major]).toEqual(['moll', 'dur']);
+    expect([en.quality.minor, en.quality.major]).toEqual(['minor', 'major']);
+    expect(pl.subtitle).toContain('E A D G B E');
+    expect(en.subtitle).toContain('E A D G B E');
+    expect(pl.legend.outside).toBe('dźwięk akordu spoza pentatoniki');
+    expect(en.legend.outside).toBe('chord tone outside the pentatonic');
+  });
 });

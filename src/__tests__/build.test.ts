@@ -206,3 +206,45 @@ describe('caged page build output', () => {
     expect(readdirSync(join(DIST, 'pl', 'caged'))).toContain('index.html');
   });
 });
+
+describe('pentatonic page build output', () => {
+  const text = (el: Element | null | undefined) => el?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+
+  it('build: pentatonic prerendered in pl and en with stub', () => {
+    for (const lang of ['pl', 'en'] as const) {
+      const file = `${lang}/pentatonic/index.html`;
+      expect(existsSync(join(DIST, file)), `dist/${file}`).toBe(true);
+      const d = doc(file);
+      expect(d.documentElement.getAttribute('lang')).toBe(lang);
+      const alt = (h: string) => d.querySelector(`link[rel="alternate"][hreflang="${h}"]`)?.getAttribute('href');
+      expect(alt('pl')).toBe(`${SITE}/pl/pentatonic`);
+      expect(alt('en')).toBe(`${SITE}/en/pentatonic`);
+      expect(alt('x-default')).toBe(`${SITE}/pentatonic`);
+      expect(d.querySelector('header.site-header #site-menu a[href="/' + lang + '/pentatonic"]')).not.toBeNull();
+
+      // Without JS: the A minor board, all boxes, no chord selected.
+      d.querySelectorAll('script').forEach((s) => s.remove());
+      const pressed = Array.from(d.querySelectorAll('.controls button[aria-pressed="true"]')).map(text);
+      expect(pressed).toEqual(['A', lang === 'pl' ? 'moll' : 'minor', lang === 'pl' ? 'wszystkie' : 'all']);
+      expect(d.querySelector('.board--h svg[data-orientation="horizontal"]')).not.toBeNull();
+      expect(d.querySelector('.board--v svg[data-orientation="vertical"]')).not.toBeNull();
+      const h = d.querySelector('.board--h svg')!;
+      expect(h.querySelectorAll('[data-role="outline"]')).toHaveLength(6);
+      expect(h.querySelectorAll('[data-role="slice"]')).toHaveLength(0);
+      expect(h.querySelectorAll('circle[stroke-dasharray]')).toHaveLength(0);
+      expect(text(h.querySelector('[data-role="dot"][data-string="5"][data-fret="5"] text'))).toBe('R');
+      expect(d.querySelectorAll('.tiles .tile')).toHaveLength(5);
+    }
+    const en = text(doc('en/pentatonic/index.html').body);
+    for (const pl of ['Pryma', 'Pudełko', 'wszystkie', 'wyczyść', 'moll', 'pentatonika', 'kształt', 'progi']) {
+      expect(en, pl).not.toContain(pl);
+    }
+    expect(text(doc('pl/pentatonic/index.html').querySelector('main h1'))).toContain('Pentatonika');
+
+    const stub = read('pentatonic/index.html');
+    expect(stub).toContain('location.replace');
+    const noscript = stub.match(/<noscript>([\s\S]*?)<\/noscript>/)?.[1] ?? '';
+    expect(noscript).toContain('href="/pl/pentatonic"');
+    expect(noscript).toContain('href="/en/pentatonic"');
+  });
+});
