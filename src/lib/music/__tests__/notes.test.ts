@@ -27,6 +27,26 @@ describe('notes', () => {
     expect(noteName(10, { root: 5, quality: 'major' })).toBe('Bb');
   });
 
+  it.each([
+    // [root, quality, pitch class, expected name]: a characteristic note of each flat key
+    [5, 'major', 10, 'Bb'],
+    [10, 'major', 3, 'Eb'],
+    [3, 'major', 8, 'Ab'],
+    [8, 'major', 1, 'Db'],
+    [1, 'major', 6, 'Gb'],
+    [2, 'minor', 10, 'Bb'],
+    [7, 'minor', 3, 'Eb'],
+    [0, 'minor', 8, 'Ab'],
+    [5, 'minor', 1, 'Db'],
+    [10, 'minor', 6, 'Gb'],
+    // sharp-key controls
+    [7, 'major', 6, 'F#'],
+    [4, 'minor', 6, 'F#'],
+    [2, 'major', 1, 'C#'],
+  ] as const)('noteName: key %i %s spells pc %i as %s', (root, quality, pc, name) => {
+    expect(noteName(pc, { root, quality })).toBe(name);
+  });
+
   it('computes semitones from root modulo 12', () => {
     expect(semitonesFromRoot(4, 5, 9)).toBe(0);
     expect(semitonesFromRoot(4, 0, 9)).toBe(7);

@@ -18,6 +18,16 @@ describe('keys', () => {
     expect(keyChords(C_MAJOR).map((c) => c.index)).toEqual([0, 1, 2, 3, 4, 5]);
   });
 
+  it('keyChords: A minor roots and qualities', () => {
+    expect(keyChords(A_MINOR).map((c) => c.root)).toEqual([9, 0, 2, 4, 5, 7]);
+    expect(keyChords(A_MINOR).map((c) => c.quality)).toEqual(['minor', 'major', 'minor', 'minor', 'major', 'major']);
+  });
+
+  it('keyChords: C major roots and qualities', () => {
+    expect(keyChords(C_MAJOR).map((c) => c.root)).toEqual([0, 2, 4, 5, 7, 9]);
+    expect(keyChords(C_MAJOR).map((c) => c.quality)).toEqual(['major', 'minor', 'minor', 'major', 'major', 'minor']);
+  });
+
   it('chordName: C minor spells flats (Eb Ab Bb)', () => {
     expect(keyChords(C_MINOR).map((c) => chordName(c, C_MINOR))).toEqual(['Cm', 'Eb', 'Fm', 'Gm', 'Ab', 'Bb']);
   });
