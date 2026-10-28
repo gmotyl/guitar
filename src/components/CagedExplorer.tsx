@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
 import { format, type Dict, type Lang } from '../i18n';
 import { KEYS, SHAPES, chordTones, role, shapeSummary, voicings, type ShapeKey, type Voicing } from '../lib/music/caged';
+import type { Key } from '../lib/music/keys';
 import { TUNING, semitonesFromRoot, type PitchClass } from '../lib/music/notes';
 import { Fretboard, type FretBand, type FretDot } from './Fretboard';
 
@@ -12,15 +13,19 @@ export interface CagedExplorerProps {
 
 const MAX_FRET = 15;
 const DIM = '0.12';
-const SHAPE_KEYS = SHAPES.map((s) => s.key);
+// Shape keys and colours are the same in both qualities.
+const SHAPE_LIST = SHAPES.major;
+const SHAPE_KEYS = SHAPE_LIST.map((s) => s.key);
 const cssVar = (name: string) => `var(${name})`;
 const lowest = (v: Voicing) => Math.min(...v.frets.filter((f): f is number => f != null));
 
-const VARIANT = { R: 'filled', '3': 'outline', '5': 'muted' } as const;
+const VARIANT = { R: 'filled', '3': 'outline', b3: 'outline', '5': 'muted' } as const;
 
 interface Chord {
   key: ShapeKey;
   pc: PitchClass;
+  /** The chord as a key (major until the minor switch lands). */
+  k: Key;
   tones: string;
   /** Every voicing on the board, sorted by lowest fret (board order). */
   all: Voicing[];
@@ -32,23 +37,24 @@ interface Chord {
 
 function buildChords(t: Dict['caged']): Chord[] {
   return KEYS.map(({ key, pc }) => {
+    const k: Key = { root: pc, quality: 'major' };
     // Template order (C A G E D, each +12 copy right after its shape): later dots draw on top,
     // so shared notes show the same colour as the mockup.
-    const drawn = voicings(pc, MAX_FRET);
+    const drawn = voicings(k, MAX_FRET);
     const all = [...drawn].sort((a, b) => lowest(a) - lowest(b));
     const dots = drawn.flatMap((v) =>
       v.frets.flatMap((fret, string): FretDot[] => {
         if (fret == null) return [];
-        const r = role(semitonesFromRoot(TUNING[string].pc, fret, pc));
+        const r = role(semitonesFromRoot(TUNING[string].pc, fret, pc), k.quality);
         if (!r) return [];
         return [{ string, fret, label: r, color: cssVar(v.color), variant: VARIANT[r], group: v.shape }];
       }),
     );
     const bands = all.map((v) => {
-      const s = shapeSummary(v, pc);
+      const s = shapeSummary(v, k);
       return { from: s.lo, to: s.hi, color: cssVar(v.color), label: format(t.band, { shape: v.shape }), group: v.shape };
     });
-    return { key, pc, tones: chordTones(pc).join(' · '), all, main: all.filter((v) => !v.copy), dots, bands };
+    return { key, pc, k, tones: chordTones(k).join(' · '), all, main: all.filter((v) => !v.copy), dots, bands };
   });
 }
 
@@ -57,7 +63,7 @@ export function CagedExplorer({ t }: CagedExplorerProps) {
   const [selShape, setSelShape] = useState<ShapeKey | null>(null);
   const chords = buildChords(t);
   const dimmed = selShape ? SHAPE_KEYS.filter((k) => k !== selShape) : [];
-  const shapeColor = Object.fromEntries(SHAPES.map((s) => [s.key, cssVar(s.color)])) as Record<ShapeKey, string>;
+  const shapeColor = Object.fromEntries(SHAPE_LIST.map((s) => [s.key, cssVar(s.color)])) as Record<ShapeKey, string>;
 
   const chip = (label: string, pressed: boolean, onClick: () => void, color?: string) => (
     <button
@@ -81,7 +87,7 @@ export function CagedExplorer({ t }: CagedExplorerProps) {
         <div class="chips" role="group" aria-label={t.shapeGroupAria}>
           <span class="lbl">{t.shapeLabel}</span>
           {chip(t.all, selShape === null, () => setSelShape(null))}
-          {SHAPES.map((s) => chip(s.key, selShape === s.key, () => setSelShape(s.key), cssVar(s.color)))}
+          {SHAPE_LIST.map((s) => chip(s.key, selShape === s.key, () => setSelShape(s.key), cssVar(s.color)))}
         </div>
       </div>
 
@@ -125,7 +131,7 @@ export function CagedExplorer({ t }: CagedExplorerProps) {
           ))}
           <div class="shapes">
             {c.main.map((v) => {
-              const s = shapeSummary(v, c.pc);
+              const s = shapeSummary(v, c.k);
               return (
                 <div
                   class="shape-card n"
