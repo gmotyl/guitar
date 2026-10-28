@@ -46,7 +46,8 @@ for (let si = TUNING.length - 1, pitch = 0; si >= 0; si--) {
  * The pentatonic boxes of `key` on frets 0..maxFret, sorted by `from`.
  * Box k starts at the k-th scale note on low E (fret 0–11) and takes two ascending
  * scale notes per string up to high e; it gets a +12 copy when that fits, and a
- * placement is dropped when any note leaves 0..maxFret.
+ * placement is dropped when any note leaves 0..maxFret. A box that would need a fret
+ * below 0 is drawn only 12 frets higher, as its primary (non-copy) placement.
  */
 export function boxes(key: Key, maxFret = 15): Box[] {
   const intervals = PENTATONIC.intervals[key.quality];

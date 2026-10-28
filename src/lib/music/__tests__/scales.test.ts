@@ -50,6 +50,23 @@ describe('scales', () => {
     }
   });
 
+  it('boxes: a box that would wrap above the nut is drawn 12 frets higher as the primary', () => {
+    const b3 = boxes({ root: 11, quality: 'minor' }).filter((b) => b.n === 3);
+    expect(b3.map((b) => `${b.from}–${b.to}${b.copy ? ' copy' : ''}`)).toEqual(['11–15']);
+  });
+
+  it('boxes: every key has exactly one non-copy placement per box number', () => {
+    for (const quality of ['minor', 'major'] as Quality[]) {
+      for (let root = 0; root < 12; root++) {
+        const primaries = boxes({ root, quality })
+          .filter((b) => !b.copy)
+          .map((b) => b.n)
+          .sort();
+        expect(primaries, `${root} ${quality}`).toEqual([1, 2, 3, 4, 5]);
+      }
+    }
+  });
+
   it('PENTATONIC: degree labels per quality', () => {
     const labels = (q: Quality) => PENTATONIC.intervals[q].map((i) => PENTATONIC.degreeLabels[q][i]).join(' ');
     expect(labels('minor')).toBe('R b3 4 5 b7');
