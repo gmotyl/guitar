@@ -164,6 +164,21 @@ describe('Fretboard', () => {
     expect(all(container, 'dot').map((d) => d.getAttribute('opacity'))).toEqual(['0.15', '1', '1']);
   });
 
+  it('Fretboard: per-band dimming', () => {
+    const { container } = render(
+      <Fretboard
+        orientation="horizontal"
+        dots={[]}
+        bands={[
+          { from: 5, to: 8, color: 'var(--e)', label: '1 · E', group: 'box-1', dimmed: true },
+          { from: 7, to: 10, color: 'var(--d)', label: '2 · D', group: 'box-2' },
+        ]}
+        ariaLabel="b"
+      />,
+    );
+    expect(all(container, 'band').map((b) => b.getAttribute('opacity'))).toEqual(['0.12', '1']);
+  });
+
   it('Fretboard: box outline in horizontal and vertical orientation', () => {
     // A minor box 1: frets 5..8, two notes per string.
     const cells = [

@@ -21,6 +21,8 @@ export interface FretBand {
   color: string;
   label: string;
   group?: string;
+  /** Dims this band alone, independently of `dimmedGroups`. */
+  dimmed?: boolean;
 }
 /** Stepped hull drawn around a set of cells (a pentatonic box). */
 export interface FretOutline {
@@ -254,7 +256,7 @@ export function Fretboard({
           const [rw, rh] = g.xy(z - a, g.acrossHi - g.acrossLo + 8);
           const [tx, ty] = g.xy((a + z) / 2, lane);
           return (
-            <g key={`b${i}`} data-role="band" data-group={b.group} opacity={opacityFor(b.group, dimmedGroups)}>
+            <g key={`b${i}`} data-role="band" data-group={b.group} opacity={b.dimmed ? DIM : opacityFor(b.group, dimmedGroups)}>
               <rect x={rx} y={ry} width={rw} height={rh} rx={8} fill={b.color} opacity={0.1} />
               <line {...line(a, z, lane, lane)} stroke={b.color} stroke-width={3} stroke-linecap="round" />
               <text
