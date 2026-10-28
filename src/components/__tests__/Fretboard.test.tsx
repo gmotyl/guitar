@@ -1,9 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { render } from '@testing-library/preact';
 import { Fretboard, type FretDot, type FretBand } from '../Fretboard';
+import { boxes } from '../../lib/music/scales';
 
 const num = (el: Element, attr: string) => Number(el.getAttribute(attr));
 const all = (c: Element, role: string) => Array.from(c.querySelectorAll(`[data-role="${role}"]`));
+/** Along-the-neck positions where a polygon crosses the string line at `across`. */
+const crossings = (pts: number[][], across: number, h: boolean) =>
+  pts.flatMap((p, i) => {
+    const q = pts[(i + 1) % pts.length];
+    const [pa, pc] = h ? [p[0], p[1]] : [p[1], p[0]];
+    const [qa, qc] = h ? [q[0], q[1]] : [q[1], q[0]];
+    if (pc === qc || (across - pc) * (across - qc) > 0) return [];
+    return [pa + ((across - pc) / (qc - pc)) * (qa - pa)];
+  });
 
 const dots: FretDot[] = [
   { string: 1, fret: 1, label: 'R', color: 'var(--c)', variant: 'filled', group: 'C' },
@@ -202,8 +212,8 @@ describe('Fretboard', () => {
       expect(poly.getAttribute('fill')).toBe('var(--c)');
       expect(poly.getAttribute('data-group')).toBe('1');
       const pts = poly.getAttribute('points')!.trim().split(/\s+/).map((p) => p.split(',').map(Number));
-      // One vertex per string on each side plus two corners at each end.
-      expect(pts).toHaveLength(2 * 6 + 4);
+      // Stepped, not a plain rectangle.
+      expect(pts.length).toBeGreaterThan(4);
       const xs = pts.map(([x]) => x);
       const ys = pts.map(([, y]) => y);
       // Every dot centre lies strictly inside the polygon's bounding box (padding).
@@ -220,10 +230,8 @@ describe('Fretboard', () => {
       const b = all(container, 'dot').find((d) => d.getAttribute('data-string') === '1' && d.getAttribute('data-fret') === '8')!;
       const along = (d: Element) => num(d.querySelector('circle')!, orientation === 'horizontal' ? 'cx' : 'cy');
       const across = (d: Element) => num(d.querySelector('circle')!, orientation === 'horizontal' ? 'cy' : 'cx');
-      const alongOf = (p: number[]) => (orientation === 'horizontal' ? p[0] : p[1]);
-      const acrossOf = (p: number[]) => (orientation === 'horizontal' ? p[1] : p[0]);
-      const atG = pts.filter((p) => acrossOf(p) === across(g)).map(alongOf);
-      const atB = pts.filter((p) => acrossOf(p) === across(b)).map(alongOf);
+      const atG = crossings(pts, across(g), orientation === 'horizontal');
+      const atB = crossings(pts, across(b), orientation === 'horizontal');
       expect(Math.max(...atG)).toBeGreaterThan(along(g));
       expect(Math.max(...atG)).toBeLessThan(along(b));
       expect(Math.max(...atB)).toBeGreaterThan(along(b));
@@ -391,15 +399,15 @@ describe('Fretboard overlays', () => {
           .querySelector('circle')!;
       const along = (c: Element) => num(c, h ? 'cx' : 'cy');
       const across = (c: Element) => num(c, h ? 'cy' : 'cx');
-      // Low-fret edge on each string's line, measured from the lowest dot on that string.
-      const offsets = lows.map((lo, s) => {
-        const d = dotAt(s, lo);
-        const edge = Math.min(...pts.filter((p) => (h ? p[1] : p[0]) === across(d)).map((p) => (h ? p[0] : p[1])));
-        return along(d) - edge;
-      });
-      // The edge follows every string's own lowest note by the same padding.
-      expect(offsets[0]).toBeGreaterThan(0);
-      for (const o of offsets) expect(o).toBeCloseTo(offsets[0], 1);
+      // Low-fret edge where it crosses each string's line.
+      const edges = lows.map((lo, s) => Math.min(...crossings(pts, across(dotAt(s, lo)), h)));
+      // The edge stays at least the padding before every string's own lowest note...
+      lows.forEach((lo, s) => expect(along(dotAt(s, lo)) - edges[s]).toBeGreaterThanOrEqual(18));
+      // ...and steps with them: e 5 → B 6 move in, D 4 juts out past e and G.
+      // (G's crossing is set by the steep G 7 → D 4 edge, so it is not ordered vs B.)
+      expect(edges[1]).toBeGreaterThan(edges[0]);
+      expect(edges[3]).toBeLessThan(edges[0]);
+      expect(edges[3]).toBeLessThan(edges[2]);
     }
   });
 
@@ -415,4 +423,67 @@ describe('Fretboard overlays', () => {
     expect(all(container, 'outline')).toHaveLength(0);
     expect(container.querySelectorAll('polygon')).toHaveLength(0);
   });
+});
+
+describe('Fretboard outline clearance', () => {
+  type P = [number, number];
+  /** Distance from p to segment ab. */
+  const segDist = ([px, py]: P, [ax, ay]: P, [bx, by]: P) => {
+    const dx = bx - ax, dy = by - ay;
+    const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy || 1)));
+    return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+  };
+  /** Even-odd point-in-polygon. */
+  const inside = ([px, py]: P, poly: P[]) => {
+    let hit = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const [xi, yi] = poly[i], [xj, yj] = poly[j];
+      if (yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) hit = !hit;
+    }
+    return hit;
+  };
+  const MARGIN = 3;
+  const PAD = 18;
+
+  for (const [name, key] of [
+    ['A minor', { root: 9, quality: 'minor' }],
+    ['C major', { root: 0, quality: 'major' }],
+  ] as const) {
+    for (const orientation of ['horizontal', 'vertical'] as const) {
+      it(`keeps every box dot clear of its outline edges: ${name}, ${orientation}`, () => {
+        for (const b of boxes(key, 15)) {
+          const { container, unmount } = render(
+            <Fretboard
+              orientation={orientation}
+              dots={b.cells.map((c) => ({ ...c, label: '', color: 'var(--c)', variant: 'outline' as const }))}
+              outlines={[{ group: `box-${b.n}`, color: 'var(--c)', cells: b.cells }]}
+              ariaLabel="b"
+            />,
+          );
+          const poly = all(container, 'outline')[0]
+            .getAttribute('points')!
+            .trim()
+            .split(/\s+/)
+            .map((p) => p.split(',').map(Number) as P);
+          for (const d of all(container, 'dot')) {
+            const c = d.querySelector('circle')!;
+            const centre: P = [num(c, 'cx'), num(c, 'cy')];
+            const where = `box ${b.n} dot ${d.getAttribute('data-string')}:${d.getAttribute('data-fret')}`;
+            expect(inside(centre, poly), where).toBe(true);
+            const clearance = Math.min(...poly.map((a, i) => segDist(centre, a, poly[(i + 1) % poly.length])));
+            expect(clearance, where).toBeGreaterThanOrEqual(num(c, 'r') + MARGIN);
+          }
+          // ...without mitre spikes: the outline hugs the dots' bounding box by about the padding.
+          const cs = all(container, 'dot').map((d) => d.querySelector('circle')!);
+          for (const [axis, i] of [['cx', 0], ['cy', 1]] as const) {
+            const vs = cs.map((c) => num(c, axis));
+            const ps = poly.map((p) => p[i]);
+            expect(Math.min(...vs) - Math.min(...ps), `box ${b.n} ${axis} low`).toBeLessThanOrEqual(PAD + 0.5);
+            expect(Math.max(...ps) - Math.max(...vs), `box ${b.n} ${axis} high`).toBeLessThanOrEqual(PAD + 0.5);
+          }
+          unmount();
+        }
+      });
+    }
+  }
 });

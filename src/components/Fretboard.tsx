@@ -128,25 +128,79 @@ const opacityFor = (group: string | undefined, dimmed: string[]) =>
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 /**
- * Stepped hull through the per-string min/max cells, padded by PAD:
- * down the low-fret side string by string, across the far edge, back up the
- * high-fret side. Built in (along, across) so both orientations share it.
+ * Stepped hull around a box: the polygon through the per-string min/max dot
+ * centres (down the low-fret side string by string, back up the high-fret
+ * side), grown outward by PAD with every edge kept parallel to its hull edge.
+ * Each edge thus stays PAD away from the dots it wraps, diagonal steps
+ * included, so no dot pokes through. Built in (along, across) so both
+ * orientations share it.
  */
 function outlinePoints(g: Geometry, cells: FretOutline['cells']): string {
+  type P = [number, number];
   const strings = [...new Set(cells.map((c) => c.string))].sort((a, b) => a - b);
   const span = strings.map((s) => {
     const fs = cells.filter((c) => c.string === s).map((c) => g.cellAt(c.fret));
-    return { across: g.stringAt(s), lo: Math.min(...fs) - PAD, hi: Math.max(...fs) + PAD };
+    return { across: g.stringAt(s), lo: Math.min(...fs), hi: Math.max(...fs) };
   });
-  // Padding direction across: away from the board's middle at either end.
-  const first = span[0], last = span[span.length - 1];
-  const dir = Math.sign(last.across - first.across) || 1;
-  const pts: [number, number][] = [[first.lo, first.across - dir * PAD]];
-  for (const s of span) pts.push([s.lo, s.across]);
-  pts.push([last.lo, last.across + dir * PAD], [last.hi, last.across + dir * PAD]);
-  for (const s of [...span].reverse()) pts.push([s.hi, s.across]);
-  pts.push([first.hi, first.across - dir * PAD]);
-  return pts.map(([a, c]) => g.xy(a, c).map(r2).join(',')).join(' ');
+  const out = (pts: P[]) => pts.map(([a, c]) => g.xy(a, c).map(r2).join(',')).join(' ');
+  const cross = (u: P, v: P) => u[0] * v[1] - u[1] * v[0];
+
+  // Hull through the dot centres, without repeated or collinear vertices.
+  let hull: P[] = [...span.map((s): P => [s.lo, s.across]), ...[...span].reverse().map((s): P => [s.hi, s.across])];
+  hull = hull.filter((p, i) => {
+    const q = hull[(i + hull.length - 1) % hull.length];
+    return p[0] !== q[0] || p[1] !== q[1];
+  });
+  for (let changed = true; changed && hull.length > 2; ) {
+    changed = false;
+    for (let i = 0; i < hull.length; i++) {
+      const a = hull[(i + hull.length - 1) % hull.length], p = hull[i], b = hull[(i + 1) % hull.length];
+      if (Math.abs(cross([p[0] - a[0], p[1] - a[1]], [b[0] - p[0], b[1] - p[1]])) < 1e-9) {
+        hull.splice(i, 1);
+        changed = true;
+        break;
+      }
+    }
+  }
+  if (hull.length < 3) {
+    // A single string (or a single cell): a plain padded rectangle.
+    const first = span[0], last = span[span.length - 1];
+    const lo = Math.min(...span.map((s) => s.lo)) - PAD, hi = Math.max(...span.map((s) => s.hi)) + PAD;
+    const c0 = Math.min(first.across, last.across) - PAD, c1 = Math.max(first.across, last.across) + PAD;
+    return out([[lo, c0], [lo, c1], [hi, c1], [hi, c0]]);
+  }
+
+  // Outward normal side follows the winding (sign of the shoelace area).
+  const area = hull.reduce((sum, p, i) => sum + cross(p, hull[(i + 1) % hull.length]), 0);
+  const side = Math.sign(area) || 1;
+  const edges = hull.map((a, i) => {
+    const b = hull[(i + 1) % hull.length];
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const u: P = [(b[0] - a[0]) / len, (b[1] - a[1]) / len];
+    const n: P = [side * u[1], -side * u[0]];
+    return { p: [a[0] + PAD * n[0], a[1] + PAD * n[1]] as P, u };
+  });
+  // Each vertex is where the offset lines of its two edges meet (mitre join).
+  // A sharp convex corner (a diagonal side meeting an end) would spike far out,
+  // so its mitre is cut square, PAD past the hull vertex along the axis the
+  // spike runs on: the stepped ends of the mockup.
+  const pts = edges.flatMap((e, i): P[] => {
+    const prev = edges[(i + edges.length - 1) % edges.length];
+    const turn = cross(prev.u, e.u);
+    const t = cross([e.p[0] - prev.p[0], e.p[1] - prev.p[1]], e.u) / turn;
+    const m: P = [prev.p[0] + t * prev.u[0], prev.p[1] + t * prev.u[1]];
+    const v = hull[i];
+    const over = [Math.abs(m[0] - v[0]) - PAD, Math.abs(m[1] - v[1]) - PAD];
+    const k = over[0] >= over[1] ? 0 : 1;
+    if (Math.sign(turn) !== side || over[k] < 0.01 || !prev.u[k] || !e.u[k]) return [m];
+    const cap = v[k] + Math.sign(m[k] - v[k]) * PAD;
+    const on = (l: { p: P; u: P }): P => {
+      const s = (cap - l.p[k]) / l.u[k];
+      return [l.p[0] + s * l.u[0], l.p[1] + s * l.u[1]];
+    };
+    return [on(prev), on(e)];
+  });
+  return out(pts);
 }
 
 /** Arc k of n on the dot rim around (x, y), clockwise from 12 o'clock. */
