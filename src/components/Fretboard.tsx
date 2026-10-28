@@ -5,8 +5,15 @@ export interface FretDot {
   fret: number;
   label: string;
   color: string;
-  variant: 'filled' | 'outline' | 'muted';
+  /** `dashed`: a chord tone outside the scale — dashed ring, no fill colour. */
+  variant: 'filled' | 'outline' | 'muted' | 'dashed';
   group?: string;
+  /** Two or more colours split a filled dot into equal pie slices. */
+  colors?: string[];
+  /** Extra ring around the dot (the scale root). */
+  ring?: boolean;
+  /** Dims this dot alone, independently of `dimmedGroups`. */
+  dimmed?: boolean;
 }
 export interface FretBand {
   from: number;
@@ -15,17 +22,30 @@ export interface FretBand {
   label: string;
   group?: string;
 }
+/** Stepped hull drawn around a set of cells (a pentatonic box). */
+export interface FretOutline {
+  group: string;
+  color: string;
+  cells: { string: number; fret: number }[];
+  dimmed?: boolean;
+}
 export interface FretboardProps {
   orientation: 'horizontal' | 'vertical';
   frets?: number /* 15 */;
   dots: FretDot[];
   bands?: FretBand[];
   dimmedGroups?: string[];
+  outlines?: FretOutline[];
   ariaLabel: string;
 }
 
 const MARKERS = [3, 5, 7, 9, 12, 15];
 const DIM = 0.12;
+const DOT_DIM = 0.15;
+const DOT_R = 11.5;
+const RING_R = 14;
+/** Outline padding around the outermost dot centres, along and across. */
+const PAD = 18;
 const STRINGS = TUNING.length; // 6
 
 /**
@@ -100,7 +120,46 @@ function geometry(orientation: FretboardProps['orientation'], frets: number): Ge
 const opacityFor = (group: string | undefined, dimmed: string[]) =>
   group !== undefined && dimmed.includes(group) ? DIM : 1;
 
-export function Fretboard({ orientation, frets = 15, dots, bands = [], dimmedGroups = [], ariaLabel }: FretboardProps) {
+const r2 = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * Stepped hull through the per-string min/max cells, padded by PAD:
+ * down the low-fret side string by string, across the far edge, back up the
+ * high-fret side. Built in (along, across) so both orientations share it.
+ */
+function outlinePoints(g: Geometry, cells: FretOutline['cells']): string {
+  const strings = [...new Set(cells.map((c) => c.string))].sort((a, b) => a - b);
+  const span = strings.map((s) => {
+    const fs = cells.filter((c) => c.string === s).map((c) => g.cellAt(c.fret));
+    return { across: g.stringAt(s), lo: Math.min(...fs) - PAD, hi: Math.max(...fs) + PAD };
+  });
+  // Padding direction across: away from the board's middle at either end.
+  const first = span[0], last = span[span.length - 1];
+  const dir = Math.sign(last.across - first.across) || 1;
+  const pts: [number, number][] = [[first.lo, first.across - dir * PAD]];
+  for (const s of span) pts.push([s.lo, s.across]);
+  pts.push([last.lo, last.across + dir * PAD], [last.hi, last.across + dir * PAD]);
+  for (const s of [...span].reverse()) pts.push([s.hi, s.across]);
+  pts.push([first.hi, first.across - dir * PAD]);
+  return pts.map(([a, c]) => g.xy(a, c).map(r2).join(',')).join(' ');
+}
+
+/** Pie slice k of n around (x, y), clockwise from 12 o'clock. */
+function slicePath(x: number, y: number, k: number, n: number): string {
+  const a0 = -Math.PI / 2 + (k * 2 * Math.PI) / n, a1 = a0 + (2 * Math.PI) / n;
+  const p = (a: number) => `${r2(x + DOT_R * Math.cos(a))},${r2(y + DOT_R * Math.sin(a))}`;
+  return `M${r2(x)},${r2(y)} L${p(a0)} A${DOT_R},${DOT_R} 0 0 1 ${p(a1)} Z`;
+}
+
+export function Fretboard({
+  orientation,
+  frets = 15,
+  dots,
+  bands = [],
+  dimmedGroups = [],
+  outlines = [],
+  ariaLabel,
+}: FretboardProps) {
   const g = geometry(orientation, frets);
   const vertical = orientation === 'vertical';
   const mid = (g.stringAt(0) + g.stringAt(STRINGS - 1)) / 2;
@@ -213,10 +272,34 @@ export function Fretboard({ orientation, frets = 15, dots, bands = [], dimmedGro
           );
         })}
       </g>
+      {outlines.length > 0 && (
+        <g>
+          {outlines.filter((o) => o.cells.length > 0).map((o, i) => (
+            <polygon
+              key={`o${i}`}
+              data-role="outline"
+              data-group={o.group}
+              points={outlinePoints(g, o.cells)}
+              fill={o.color}
+              fill-opacity={0.07}
+              stroke={o.color}
+              stroke-width={2.2}
+              stroke-linejoin="round"
+              opacity={o.dimmed ? DIM : opacityFor(o.group, dimmedGroups)}
+            />
+          ))}
+        </g>
+      )}
       <g>
         {dots.map((d, i) => {
           const [x, y] = g.xy(g.cellAt(d.fret), g.stringAt(d.string));
-          const fill = d.variant === 'filled' ? d.color : d.variant === 'outline' ? 'var(--card)' : 'var(--muted)';
+          const fill =
+            d.variant === 'filled'
+              ? d.color
+              : d.variant === 'outline' || d.variant === 'dashed'
+                ? 'var(--card)'
+                : 'var(--muted)';
+          const split = d.variant === 'filled' && d.colors !== undefined && d.colors.length > 1;
           return (
             <g
               key={`d${i}`}
@@ -224,16 +307,33 @@ export function Fretboard({ orientation, frets = 15, dots, bands = [], dimmedGro
               data-group={d.group}
               data-string={d.string}
               data-fret={d.fret}
-              opacity={opacityFor(d.group, dimmedGroups)}
+              opacity={d.dimmed ? DOT_DIM : opacityFor(d.group, dimmedGroups)}
             >
-              <circle cx={x} cy={y} r={11.5} fill={fill} stroke={d.color} stroke-width={2.5} />
+              {split ? (
+                d.colors!.map((c, k) => (
+                  <path key={`p${k}`} data-role="slice" d={slicePath(x, y, k, d.colors!.length)} fill={c} />
+                ))
+              ) : (
+                <circle
+                  cx={x}
+                  cy={y}
+                  r={DOT_R}
+                  fill={d.variant === 'filled' && d.colors?.length === 1 ? d.colors[0] : fill}
+                  stroke={d.color}
+                  stroke-width={2.5}
+                  stroke-dasharray={d.variant === 'dashed' ? '3 2' : undefined}
+                />
+              )}
+              {d.ring && (
+                <circle data-role="ring" cx={x} cy={y} r={RING_R} fill="none" stroke="var(--fg)" stroke-width={2} />
+              )}
               <text
                 x={x}
                 y={y + 4}
                 text-anchor="middle"
                 font-size={11}
                 font-weight={700}
-                fill={d.variant === 'outline' ? 'var(--fg)' : 'var(--on)'}
+                fill={d.variant === 'outline' ? 'var(--fg)' : d.variant === 'dashed' ? d.color : 'var(--on)'}
               >
                 {d.label}
               </text>

@@ -82,4 +82,136 @@ describe('Fretboard', () => {
     expect(svg.getAttribute('role')).toBe('img');
     expect(svg.getAttribute('aria-label')).toBe('CAGED C');
   });
+
+  it('Fretboard: existing props render unchanged', () => {
+    // CAGED-style board using only the pre-overlay props; the snapshot was
+    // recorded before outlines/split/dashed/ring/dimmed dots existed.
+    for (const orientation of ['horizontal', 'vertical'] as const) {
+      const { container } = render(
+        <Fretboard orientation={orientation} dots={dots} bands={bands} dimmedGroups={['A']} ariaLabel="CAGED C" />,
+      );
+      expect(container.innerHTML).toMatchSnapshot(orientation);
+    }
+  });
+
+  it('Fretboard: split dot renders one slice per colour', () => {
+    const { container } = render(
+      <Fretboard
+        orientation="horizontal"
+        dots={[{ string: 2, fret: 5, label: 'R', color: 'var(--k0)', colors: ['var(--k0)', 'var(--k1)'], variant: 'filled' }]}
+        ariaLabel="b"
+      />,
+    );
+    const slices = Array.from(all(container, 'dot')[0].querySelectorAll('[data-role="slice"]'));
+    expect(slices.map((p) => p.getAttribute('fill'))).toEqual(['var(--k0)', 'var(--k1)']);
+    // Equal halves: two arcs of the dot radius whose end points are a diameter apart.
+    const arcs = slices.map((p) => {
+      const m = p.getAttribute('d')!.match(/^M[-\d.]+,[-\d.]+ L[-\d.]+,[-\d.]+ A([\d.]+),\1 0 0 1 ([-\d.]+),([-\d.]+) Z$/);
+      expect(m).not.toBeNull();
+      return m!.slice(1).map(Number);
+    });
+    const [[r, x0, y0], [, x1, y1]] = arcs;
+    expect(Math.hypot(x1 - x0, y1 - y0)).toBeCloseTo(2 * r, 1);
+  });
+
+  it('Fretboard: dashed dot', () => {
+    const { container } = render(
+      <Fretboard
+        orientation="vertical"
+        dots={[{ string: 2, fret: 6, label: '3', color: 'var(--k2)', variant: 'dashed' }]}
+        ariaLabel="b"
+      />,
+    );
+    const circle = all(container, 'dot')[0].querySelector('circle')!;
+    expect(circle.getAttribute('stroke-dasharray')).toBeTruthy();
+    expect(circle.getAttribute('stroke')).toBe('var(--k2)');
+    expect(circle.getAttribute('fill')).not.toBe('var(--k2)');
+  });
+
+  it('Fretboard: root ring', () => {
+    const { container } = render(
+      <Fretboard
+        orientation="horizontal"
+        dots={[
+          { string: 0, fret: 5, label: 'R', color: 'var(--k0)', variant: 'filled', ring: true },
+          { string: 1, fret: 5, label: '5', color: 'var(--k0)', variant: 'filled' },
+        ]}
+        ariaLabel="b"
+      />,
+    );
+    const [ringed, plain] = all(container, 'dot');
+    const ring = ringed.querySelector('[data-role="ring"]')!;
+    expect(ring.tagName.toLowerCase()).toBe('circle');
+    expect(ring.getAttribute('fill')).toBe('none');
+    const body = ringed.querySelector('circle:not([data-role="ring"])')!;
+    expect(num(ring, 'r')).toBeGreaterThan(num(body, 'r'));
+    expect([num(ring, 'cx'), num(ring, 'cy')]).toEqual([num(body, 'cx'), num(body, 'cy')]);
+    expect(plain.querySelector('[data-role="ring"]')).toBeNull();
+  });
+
+  it('Fretboard: per-dot dimming', () => {
+    const { container } = render(
+      <Fretboard
+        orientation="horizontal"
+        dots={[
+          { string: 0, fret: 5, label: '1', color: 'var(--muted)', variant: 'outline', dimmed: true },
+          { string: 1, fret: 5, label: '5', color: 'var(--k0)', variant: 'filled' },
+          { string: 2, fret: 5, label: 'b3', color: 'var(--k0)', variant: 'filled', dimmed: false },
+        ]}
+        ariaLabel="b"
+      />,
+    );
+    expect(all(container, 'dot').map((d) => d.getAttribute('opacity'))).toEqual(['0.15', '1', '1']);
+  });
+
+  it('Fretboard: box outline in horizontal and vertical orientation', () => {
+    // A minor box 1: frets 5..8, two notes per string.
+    const cells = [
+      [0, 5], [0, 8], [1, 5], [1, 8], [2, 5], [2, 7],
+      [3, 5], [3, 7], [4, 5], [4, 7], [5, 5], [5, 8],
+    ].map(([string, fret]) => ({ string, fret }));
+    for (const orientation of ['horizontal', 'vertical'] as const) {
+      const { container } = render(
+        <Fretboard
+          orientation={orientation}
+          dots={cells.map((c) => ({ ...c, label: '', color: 'var(--c)', variant: 'outline' as const }))}
+          outlines={[{ group: '1', color: 'var(--c)', cells }]}
+          ariaLabel="b"
+        />,
+      );
+      const outlines = all(container, 'outline');
+      expect(outlines).toHaveLength(1);
+      const poly = outlines[0];
+      expect(poly.tagName.toLowerCase()).toBe('polygon');
+      expect(poly.getAttribute('stroke')).toBe('var(--c)');
+      expect(poly.getAttribute('fill')).toBe('var(--c)');
+      expect(poly.getAttribute('data-group')).toBe('1');
+      const pts = poly.getAttribute('points')!.trim().split(/\s+/).map((p) => p.split(',').map(Number));
+      // One vertex per string on each side plus two corners at each end.
+      expect(pts).toHaveLength(2 * 6 + 4);
+      const xs = pts.map(([x]) => x);
+      const ys = pts.map(([, y]) => y);
+      // Every dot centre lies strictly inside the polygon's bounding box (padding).
+      for (const d of all(container, 'dot')) {
+        const c = d.querySelector('circle')!;
+        const [cx, cy] = [num(c, 'cx'), num(c, 'cy')];
+        expect(cx).toBeGreaterThan(Math.min(...xs));
+        expect(cx).toBeLessThan(Math.max(...xs));
+        expect(cy).toBeGreaterThan(Math.min(...ys));
+        expect(cy).toBeLessThan(Math.max(...ys));
+      }
+      // Stepped: the polygon passes the G string (2) at the fret-7 column, not fret 8.
+      const g = all(container, 'dot').find((d) => d.getAttribute('data-string') === '2' && d.getAttribute('data-fret') === '7')!;
+      const b = all(container, 'dot').find((d) => d.getAttribute('data-string') === '1' && d.getAttribute('data-fret') === '8')!;
+      const along = (d: Element) => num(d.querySelector('circle')!, orientation === 'horizontal' ? 'cx' : 'cy');
+      const across = (d: Element) => num(d.querySelector('circle')!, orientation === 'horizontal' ? 'cy' : 'cx');
+      const alongOf = (p: number[]) => (orientation === 'horizontal' ? p[0] : p[1]);
+      const acrossOf = (p: number[]) => (orientation === 'horizontal' ? p[1] : p[0]);
+      const atG = pts.filter((p) => acrossOf(p) === across(g)).map(alongOf);
+      const atB = pts.filter((p) => acrossOf(p) === across(b)).map(alongOf);
+      expect(Math.max(...atG)).toBeGreaterThan(along(g));
+      expect(Math.max(...atG)).toBeLessThan(along(b));
+      expect(Math.max(...atB)).toBeGreaterThan(along(b));
+    }
+  });
 });
