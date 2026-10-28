@@ -105,6 +105,17 @@ describe('board', () => {
     expect(dots.filter((d) => d.variant === 'dashed').every((d) => pcAt(d.string, d.fret) === 5)).toBe(true);
   });
 
+  it('buildBoard: tone outside the scale shared by two chords is dashed with both colours', () => {
+    // A minor, iv · Dm (slot 2) + VI · F (slot 4): F is b3 of Dm and the root of F.
+    const { dots } = buildBoard(state({ chords: new Set([DM, 4]) }));
+    const fs = dots.filter((d) => pcAt(d.string, d.fret) === 5);
+    expect(fs).toHaveLength(9);
+    for (const d of fs) {
+      expect(d).toMatchObject({ variant: 'dashed', color: 'var(--k2)', label: 'b3' });
+      expect(d.colors).toEqual(['var(--k2)', 'var(--k4)']);
+    }
+  });
+
   it('buildBoard: chord tones are never dimmed by the box filter', () => {
     const { dots, boxes: bx } = buildBoard(state({ chords: new Set([EM]), box: 1 }));
     const inBox1 = new Set(bx.filter((b) => b.n === 1).flatMap((b) => b.cells.map((c) => `${c.string}:${c.fret}`)));

@@ -268,7 +268,7 @@ describe('Fretboard overlays', () => {
     expect(circles[0].getAttribute('fill')).toBe('var(--k3)');
   });
 
-  it('splits into slices only for filled dots', () => {
+  it('splits filled dots into slices and dashed dots into dashed arcs', () => {
     const colors = ['var(--k0)', 'var(--k1)'];
     const { container } = render(
       <Fretboard
@@ -282,7 +282,62 @@ describe('Fretboard overlays', () => {
         ariaLabel="b"
       />,
     );
-    expect(all(container, 'dot').map((d) => d.querySelectorAll('[data-role="slice"]').length)).toEqual([2, 0, 0, 0]);
+    const ds = all(container, 'dot');
+    expect(ds.map((d) => d.querySelectorAll('[data-role="slice"]').length)).toEqual([2, 0, 0, 0]);
+    expect(ds.map((d) => d.querySelectorAll('[data-role="arc"]').length)).toEqual([0, 0, 2, 0]);
+  });
+
+  it('draws a multi-colour dashed dot as one dashed arc per colour on a card fill', () => {
+    const colors = ['var(--k2)', 'var(--k4)'];
+    for (const orientation of ['horizontal', 'vertical'] as const) {
+      const { container } = render(
+        <Fretboard
+          orientation={orientation}
+          dots={[{ string: 5, fret: 1, label: 'b3', color: 'var(--k2)', colors, variant: 'dashed' }]}
+          ariaLabel="b"
+        />,
+      );
+      const dot = all(container, 'dot')[0];
+      const body = dot.querySelector('circle:not([data-role="ring"])')!;
+      expect(body.getAttribute('fill')).toBe('var(--card)');
+      const [cx, cy] = [num(body, 'cx'), num(body, 'cy')];
+      const arcs = Array.from(dot.querySelectorAll('[data-role="arc"]'));
+      expect(arcs.map((a) => a.getAttribute('stroke'))).toEqual(colors);
+      for (const a of arcs) {
+        expect(a.getAttribute('fill')).toBe('none');
+        expect(a.getAttribute('stroke-dasharray')).toBe('3 2');
+      }
+      // Same split as the filled pie: halves from 12 o'clock, clockwise, on the dot radius.
+      const ends = arcs.map((a) => {
+        const m = a.getAttribute('d')!.match(/^M([-\d.]+),([-\d.]+) A([\d.]+),\3 0 0 1 ([-\d.]+),([-\d.]+)$/);
+        expect(m).not.toBeNull();
+        return m!.slice(1).map(Number);
+      });
+      const [[x0, y0, r, x1, y1], [x2, y2, , x3, y3]] = ends;
+      expect(r).toBe(num(body, 'r'));
+      expect([x0, y0]).toEqual([cx, cy - r]);
+      expect([x1, y1]).toEqual([cx, cy + r]);
+      expect([x2, y2]).toEqual([x1, y1]);
+      expect([x3, y3]).toEqual([x0, y0]);
+      expect(dot.querySelector('text')!.getAttribute('fill')).toBe('var(--k2)');
+    }
+  });
+
+  it('keeps a single-colour dashed dot a plain dashed circle', () => {
+    const { container } = render(
+      <Fretboard
+        orientation="horizontal"
+        dots={[{ string: 2, fret: 6, label: 'b3', color: 'var(--k2)', colors: ['var(--k2)'], variant: 'dashed' }]}
+        ariaLabel="b"
+      />,
+    );
+    const dot = all(container, 'dot')[0];
+    expect(dot.querySelectorAll('[data-role="arc"], [data-role="slice"]')).toHaveLength(0);
+    const circles = dot.querySelectorAll('circle');
+    expect(circles).toHaveLength(1);
+    expect(circles[0].getAttribute('fill')).toBe('var(--card)');
+    expect(circles[0].getAttribute('stroke')).toBe('var(--k2)');
+    expect(circles[0].getAttribute('stroke-dasharray')).toBe('3 2');
   });
 
   it('fills a dashed dot with the card colour and labels it in the dot colour', () => {

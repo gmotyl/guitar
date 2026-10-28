@@ -195,6 +195,19 @@ describe('ScaleExplorer', () => {
     }
   });
 
+  it('ScaleExplorer: F shared by Dm and F shows both chord colours', () => {
+    const { container } = renderExplorer();
+    click(CHORDS, 'iv · Dm');
+    click(CHORDS, 'VI · F');
+    const svg = hBoard(container);
+    // F lies outside the A minor pentatonic: dashed, one arc per chord colour.
+    for (const [s, f] of [[5, 1], [4, 8], [3, 3], [2, 10], [1, 6], [0, 13]]) {
+      const arcs = Array.from(dotAt(svg, s, f)!.querySelectorAll('[data-role="arc"]'));
+      expect(arcs.map((a) => a.getAttribute('stroke')), `${s}:${f}`).toEqual(['var(--k2)', 'var(--k4)']);
+      for (const a of arcs) expect(a.getAttribute('stroke-dasharray')).toBe('3 2');
+    }
+  });
+
   it('ScaleExplorer: legend entries follow selection', () => {
     const { container } = renderExplorer();
     expect(legend(container)).toEqual(['pryma skali', 'reszta skali (stopień)']);

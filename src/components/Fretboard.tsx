@@ -8,7 +8,10 @@ export interface FretDot {
   /** `dashed`: a chord tone outside the scale — dashed ring, no fill colour. */
   variant: 'filled' | 'outline' | 'muted' | 'dashed';
   group?: string;
-  /** Two or more colours split a filled dot into equal pie slices. */
+  /**
+   * Two or more colours split a filled dot into equal pie slices, and a dashed
+   * dot into equal dashed arcs, one per colour.
+   */
   colors?: string[];
   /** Extra ring around the dot (the scale root). */
   ring?: boolean;
@@ -146,11 +149,16 @@ function outlinePoints(g: Geometry, cells: FretOutline['cells']): string {
   return pts.map(([a, c]) => g.xy(a, c).map(r2).join(',')).join(' ');
 }
 
-/** Pie slice k of n around (x, y), clockwise from 12 o'clock. */
-function slicePath(x: number, y: number, k: number, n: number): string {
+/** Arc k of n on the dot rim around (x, y), clockwise from 12 o'clock. */
+function arcPath(x: number, y: number, k: number, n: number): string {
   const a0 = -Math.PI / 2 + (k * 2 * Math.PI) / n, a1 = a0 + (2 * Math.PI) / n;
   const p = (a: number) => `${r2(x + DOT_R * Math.cos(a))},${r2(y + DOT_R * Math.sin(a))}`;
-  return `M${r2(x)},${r2(y)} L${p(a0)} A${DOT_R},${DOT_R} 0 0 1 ${p(a1)} Z`;
+  return `M${p(a0)} A${DOT_R},${DOT_R} 0 0 1 ${p(a1)}`;
+}
+
+/** Pie slice k of n around (x, y): the matching arc closed through the centre. */
+function slicePath(x: number, y: number, k: number, n: number): string {
+  return `M${r2(x)},${r2(y)} L${arcPath(x, y, k, n).slice(1)} Z`;
 }
 
 export function Fretboard({
@@ -301,7 +309,9 @@ export function Fretboard({
               : d.variant === 'outline' || d.variant === 'dashed'
                 ? 'var(--card)'
                 : 'var(--muted)';
-          const split = d.variant === 'filled' && d.colors !== undefined && d.colors.length > 1;
+          const multi = d.colors !== undefined && d.colors.length > 1;
+          const split = d.variant === 'filled' && multi;
+          const arcs = d.variant === 'dashed' && multi;
           return (
             <g
               key={`d${i}`}
@@ -315,6 +325,21 @@ export function Fretboard({
                 d.colors!.map((c, k) => (
                   <path key={`p${k}`} data-role="slice" d={slicePath(x, y, k, d.colors!.length)} fill={c} />
                 ))
+              ) : arcs ? (
+                <>
+                  <circle cx={x} cy={y} r={DOT_R} fill={fill} />
+                  {d.colors!.map((c, k) => (
+                    <path
+                      key={`a${k}`}
+                      data-role="arc"
+                      d={arcPath(x, y, k, d.colors!.length)}
+                      fill="none"
+                      stroke={c}
+                      stroke-width={2.5}
+                      stroke-dasharray="3 2"
+                    />
+                  ))}
+                </>
               ) : (
                 <circle
                   cx={x}
