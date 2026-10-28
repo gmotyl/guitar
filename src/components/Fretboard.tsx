@@ -5,8 +5,18 @@ export interface FretDot {
   fret: number;
   label: string;
   color: string;
-  variant: 'filled' | 'outline' | 'muted';
+  /** `dashed`: a chord tone outside the scale — dashed ring, no fill colour. */
+  variant: 'filled' | 'outline' | 'muted' | 'dashed';
   group?: string;
+  /**
+   * Two or more colours split a filled dot into equal pie slices, and a dashed
+   * dot into equal dashed arcs, one per colour.
+   */
+  colors?: string[];
+  /** Extra ring around the dot (the scale root). */
+  ring?: boolean;
+  /** Dims this dot alone, independently of `dimmedGroups`. */
+  dimmed?: boolean;
 }
 export interface FretBand {
   from: number;
@@ -14,6 +24,15 @@ export interface FretBand {
   color: string;
   label: string;
   group?: string;
+  /** Dims this band alone, independently of `dimmedGroups`. */
+  dimmed?: boolean;
+}
+/** Stepped hull drawn around a set of cells (a pentatonic box). */
+export interface FretOutline {
+  group: string;
+  color: string;
+  cells: { string: number; fret: number }[];
+  dimmed?: boolean;
 }
 export interface FretboardProps {
   orientation: 'horizontal' | 'vertical';
@@ -21,11 +40,17 @@ export interface FretboardProps {
   dots: FretDot[];
   bands?: FretBand[];
   dimmedGroups?: string[];
+  outlines?: FretOutline[];
   ariaLabel: string;
 }
 
 const MARKERS = [3, 5, 7, 9, 12, 15];
 const DIM = 0.12;
+const DOT_DIM = 0.15;
+const DOT_R = 11.5;
+const RING_R = 14;
+/** Outline padding around the outermost dot centres, along and across. */
+const PAD = 18;
 const STRINGS = TUNING.length; // 6
 
 /**
@@ -100,7 +125,105 @@ function geometry(orientation: FretboardProps['orientation'], frets: number): Ge
 const opacityFor = (group: string | undefined, dimmed: string[]) =>
   group !== undefined && dimmed.includes(group) ? DIM : 1;
 
-export function Fretboard({ orientation, frets = 15, dots, bands = [], dimmedGroups = [], ariaLabel }: FretboardProps) {
+const r2 = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * Stepped hull around a box: the polygon through the per-string min/max dot
+ * centres (down the low-fret side string by string, back up the high-fret
+ * side), grown outward by PAD with every edge kept parallel to its hull edge.
+ * Each edge thus stays PAD away from the dots it wraps, diagonal steps
+ * included, so no dot pokes through. Built in (along, across) so both
+ * orientations share it.
+ */
+function outlinePoints(g: Geometry, cells: FretOutline['cells']): string {
+  type P = [number, number];
+  const strings = [...new Set(cells.map((c) => c.string))].sort((a, b) => a - b);
+  const span = strings.map((s) => {
+    const fs = cells.filter((c) => c.string === s).map((c) => g.cellAt(c.fret));
+    return { across: g.stringAt(s), lo: Math.min(...fs), hi: Math.max(...fs) };
+  });
+  const out = (pts: P[]) => pts.map(([a, c]) => g.xy(a, c).map(r2).join(',')).join(' ');
+  const cross = (u: P, v: P) => u[0] * v[1] - u[1] * v[0];
+
+  // Hull through the dot centres, without repeated or collinear vertices.
+  let hull: P[] = [...span.map((s): P => [s.lo, s.across]), ...[...span].reverse().map((s): P => [s.hi, s.across])];
+  hull = hull.filter((p, i) => {
+    const q = hull[(i + hull.length - 1) % hull.length];
+    return p[0] !== q[0] || p[1] !== q[1];
+  });
+  for (let changed = true; changed && hull.length > 2; ) {
+    changed = false;
+    for (let i = 0; i < hull.length; i++) {
+      const a = hull[(i + hull.length - 1) % hull.length], p = hull[i], b = hull[(i + 1) % hull.length];
+      if (Math.abs(cross([p[0] - a[0], p[1] - a[1]], [b[0] - p[0], b[1] - p[1]])) < 1e-9) {
+        hull.splice(i, 1);
+        changed = true;
+        break;
+      }
+    }
+  }
+  if (hull.length < 3) {
+    // A single string (or a single cell): a plain padded rectangle.
+    const first = span[0], last = span[span.length - 1];
+    const lo = Math.min(...span.map((s) => s.lo)) - PAD, hi = Math.max(...span.map((s) => s.hi)) + PAD;
+    const c0 = Math.min(first.across, last.across) - PAD, c1 = Math.max(first.across, last.across) + PAD;
+    return out([[lo, c0], [lo, c1], [hi, c1], [hi, c0]]);
+  }
+
+  // Outward normal side follows the winding (sign of the shoelace area).
+  const area = hull.reduce((sum, p, i) => sum + cross(p, hull[(i + 1) % hull.length]), 0);
+  const side = Math.sign(area) || 1;
+  const edges = hull.map((a, i) => {
+    const b = hull[(i + 1) % hull.length];
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const u: P = [(b[0] - a[0]) / len, (b[1] - a[1]) / len];
+    const n: P = [side * u[1], -side * u[0]];
+    return { p: [a[0] + PAD * n[0], a[1] + PAD * n[1]] as P, u };
+  });
+  // Each vertex is where the offset lines of its two edges meet (mitre join).
+  // A sharp convex corner (a diagonal side meeting an end) would spike far out,
+  // so its mitre is cut square, PAD past the hull vertex along the axis the
+  // spike runs on: the stepped ends of the mockup.
+  const pts = edges.flatMap((e, i): P[] => {
+    const prev = edges[(i + edges.length - 1) % edges.length];
+    const turn = cross(prev.u, e.u);
+    const t = cross([e.p[0] - prev.p[0], e.p[1] - prev.p[1]], e.u) / turn;
+    const m: P = [prev.p[0] + t * prev.u[0], prev.p[1] + t * prev.u[1]];
+    const v = hull[i];
+    const over = [Math.abs(m[0] - v[0]) - PAD, Math.abs(m[1] - v[1]) - PAD];
+    const k = over[0] >= over[1] ? 0 : 1;
+    if (Math.sign(turn) !== side || over[k] < 0.01 || !prev.u[k] || !e.u[k]) return [m];
+    const cap = v[k] + Math.sign(m[k] - v[k]) * PAD;
+    const on = (l: { p: P; u: P }): P => {
+      const s = (cap - l.p[k]) / l.u[k];
+      return [l.p[0] + s * l.u[0], l.p[1] + s * l.u[1]];
+    };
+    return [on(prev), on(e)];
+  });
+  return out(pts);
+}
+
+/** Arc k of n on the dot rim around (x, y), clockwise from 12 o'clock. */
+function arcPath(x: number, y: number, k: number, n: number): string {
+  const a0 = -Math.PI / 2 + (k * 2 * Math.PI) / n, a1 = a0 + (2 * Math.PI) / n;
+  const p = (a: number) => `${r2(x + DOT_R * Math.cos(a))},${r2(y + DOT_R * Math.sin(a))}`;
+  return `M${p(a0)} A${DOT_R},${DOT_R} 0 0 1 ${p(a1)}`;
+}
+
+/** Pie slice k of n around (x, y): the matching arc closed through the centre. */
+function slicePath(x: number, y: number, k: number, n: number): string {
+  return `M${r2(x)},${r2(y)} L${arcPath(x, y, k, n).slice(1)} Z`;
+}
+
+export function Fretboard({
+  orientation,
+  frets = 15,
+  dots,
+  bands = [],
+  dimmedGroups = [],
+  outlines = [],
+  ariaLabel,
+}: FretboardProps) {
   const g = geometry(orientation, frets);
   const vertical = orientation === 'vertical';
   const mid = (g.stringAt(0) + g.stringAt(STRINGS - 1)) / 2;
@@ -195,7 +318,7 @@ export function Fretboard({ orientation, frets = 15, dots, bands = [], dimmedGro
           const [rw, rh] = g.xy(z - a, g.acrossHi - g.acrossLo + 8);
           const [tx, ty] = g.xy((a + z) / 2, lane);
           return (
-            <g key={`b${i}`} data-role="band" data-group={b.group} opacity={opacityFor(b.group, dimmedGroups)}>
+            <g key={`b${i}`} data-role="band" data-group={b.group} opacity={b.dimmed ? DIM : opacityFor(b.group, dimmedGroups)}>
               <rect x={rx} y={ry} width={rw} height={rh} rx={8} fill={b.color} opacity={0.1} />
               <line {...line(a, z, lane, lane)} stroke={b.color} stroke-width={3} stroke-linecap="round" />
               <text
@@ -213,10 +336,36 @@ export function Fretboard({ orientation, frets = 15, dots, bands = [], dimmedGro
           );
         })}
       </g>
+      {outlines.length > 0 && (
+        <g>
+          {outlines.filter((o) => o.cells.length > 0).map((o, i) => (
+            <polygon
+              key={`o${i}`}
+              data-role="outline"
+              data-group={o.group}
+              points={outlinePoints(g, o.cells)}
+              fill={o.color}
+              fill-opacity={0.07}
+              stroke={o.color}
+              stroke-width={2.2}
+              stroke-linejoin="round"
+              opacity={o.dimmed ? DIM : opacityFor(o.group, dimmedGroups)}
+            />
+          ))}
+        </g>
+      )}
       <g>
         {dots.map((d, i) => {
           const [x, y] = g.xy(g.cellAt(d.fret), g.stringAt(d.string));
-          const fill = d.variant === 'filled' ? d.color : d.variant === 'outline' ? 'var(--card)' : 'var(--muted)';
+          const fill =
+            d.variant === 'filled'
+              ? d.color
+              : d.variant === 'outline' || d.variant === 'dashed'
+                ? 'var(--card)'
+                : 'var(--muted)';
+          const multi = d.colors !== undefined && d.colors.length > 1;
+          const split = d.variant === 'filled' && multi;
+          const arcs = d.variant === 'dashed' && multi;
           return (
             <g
               key={`d${i}`}
@@ -224,16 +373,48 @@ export function Fretboard({ orientation, frets = 15, dots, bands = [], dimmedGro
               data-group={d.group}
               data-string={d.string}
               data-fret={d.fret}
-              opacity={opacityFor(d.group, dimmedGroups)}
+              opacity={d.dimmed ? DOT_DIM : opacityFor(d.group, dimmedGroups)}
             >
-              <circle cx={x} cy={y} r={11.5} fill={fill} stroke={d.color} stroke-width={2.5} />
+              {split ? (
+                d.colors!.map((c, k) => (
+                  <path key={`p${k}`} data-role="slice" d={slicePath(x, y, k, d.colors!.length)} fill={c} />
+                ))
+              ) : arcs ? (
+                <>
+                  <circle cx={x} cy={y} r={DOT_R} fill={fill} />
+                  {d.colors!.map((c, k) => (
+                    <path
+                      key={`a${k}`}
+                      data-role="arc"
+                      d={arcPath(x, y, k, d.colors!.length)}
+                      fill="none"
+                      stroke={c}
+                      stroke-width={2.5}
+                      stroke-dasharray="3 2"
+                    />
+                  ))}
+                </>
+              ) : (
+                <circle
+                  cx={x}
+                  cy={y}
+                  r={DOT_R}
+                  fill={d.variant === 'filled' && d.colors?.length === 1 ? d.colors[0] : fill}
+                  stroke={d.color}
+                  stroke-width={2.5}
+                  stroke-dasharray={d.variant === 'dashed' ? '3 2' : undefined}
+                />
+              )}
+              {d.ring && (
+                <circle data-role="ring" cx={x} cy={y} r={RING_R} fill="none" stroke="var(--fg)" stroke-width={2} />
+              )}
               <text
                 x={x}
                 y={y + 4}
                 text-anchor="middle"
                 font-size={11}
                 font-weight={700}
-                fill={d.variant === 'outline' ? 'var(--fg)' : 'var(--on)'}
+                fill={d.variant === 'outline' ? 'var(--fg)' : d.variant === 'dashed' ? d.color : 'var(--on)'}
               >
                 {d.label}
               </text>

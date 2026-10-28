@@ -40,6 +40,15 @@ describe('dictionaries', () => {
     expect(t('en').caged.subtitle).toContain('E A D G B E');
   });
 
+  it('caged subtitle and how-to-read fact are quality-neutral', () => {
+    const pl = t('pl').caged;
+    const en = t('en').caged;
+    expect(pl.subtitle).toContain('durowych lub molowych');
+    expect(en.subtitle).toContain('major or minor chords');
+    expect(pl.facts[0].body).toContain('b3 to tercja mała');
+    expect(en.facts[0].body).toContain('b3 is the minor third');
+  });
+
   it('pl and en templates use the same placeholders', () => {
     const pl = flatten(t('pl'));
     const en = flatten(t('en'));
@@ -47,5 +56,35 @@ describe('dictionaries', () => {
     for (const key of Object.keys(pl)) {
       expect(names(en[key]), key).toEqual(names(pl[key]));
     }
+  });
+
+  it('dictionaries: caged quality strings exist in pl and en', () => {
+    const pl = t('pl').caged;
+    const en = t('en').caged;
+    expect([pl.quality.minor, pl.quality.major]).toEqual(['moll', 'dur']);
+    expect([en.quality.minor, en.quality.major]).toEqual(['minor', 'major']);
+    expect(pl.quality.label).toBe('Tryb:');
+    expect(en.quality.label).toBe('Quality:');
+    expect(pl.legend.thirdMinor).toBe('b3 — tercja mała');
+    expect(en.legend.thirdMinor).toBe('b3 — minor third');
+    expect(pl.hardShape).toBe('trudny do zagrania w całości — zwykle grany częściowo');
+    expect(en.hardShape).toBe('hard to play in full — usually played in part');
+    expect(pl.chordHeadingMinor).toBe('Akord {key}-moll');
+    expect(en.chordHeadingMinor).toBe('{key} minor');
+    for (const d of [pl, en]) {
+      expect(d.boardAriaMinor).toContain('{max}');
+      expect(d.boardRegionAriaMinor).toContain('{key}');
+    }
+  });
+
+  it('dictionaries: pentatonic strings in pl and en', () => {
+    const pl = t('pl').pentatonic;
+    const en = t('en').pentatonic;
+    expect([pl.quality.minor, pl.quality.major]).toEqual(['moll', 'dur']);
+    expect([en.quality.minor, en.quality.major]).toEqual(['minor', 'major']);
+    expect(pl.subtitle).toContain('E A D G B E');
+    expect(en.subtitle).toContain('E A D G B E');
+    expect(pl.legend.outside).toBe('dźwięk akordu spoza pentatoniki');
+    expect(en.legend.outside).toBe('chord tone outside the pentatonic');
   });
 });

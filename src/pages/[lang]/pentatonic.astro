@@ -1,0 +1,18 @@
+---
+import Site from '../../layouts/Site.astro';
+import { ScaleExplorer } from '../../components/ScaleExplorer';
+import { LANGS, t, type Lang } from '../../i18n';
+import '../../components/scale.css';
+
+export function getStaticPaths() {
+  return LANGS.map((lang) => ({ params: { lang } }));
+}
+
+const lang = Astro.params.lang as Lang;
+const dict = t(lang);
+---
+<Site lang={lang} title={dict.pentatonic.title} slug="pentatonic">
+  <h1>{dict.pentatonic.title}</h1>
+  <p class="sub">{dict.pentatonic.subtitle}</p>
+  <ScaleExplorer client:load lang={lang} t={dict.pentatonic} scale="pentatonic" />
+</Site>

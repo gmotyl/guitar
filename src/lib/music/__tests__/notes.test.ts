@@ -12,6 +12,58 @@ describe('notes', () => {
     expect([...TUNING].reverse().map((s) => s.label).join(' ')).toBe('E A D G B e');
   });
 
+  it('noteName: E major spells sharps', () => {
+    const key = { root: 4, quality: 'major' } as const;
+    expect([4, 6, 8, 11, 1].map((pc) => noteName(pc, key)).join(' ')).toBe('E F# G# B C#');
+  });
+
+  it('noteName: no key keeps sharps', () => {
+    expect(Array.from({ length: 12 }, (_, pc) => noteName(pc))).toEqual([...NOTES]);
+    expect(noteName(3)).toBe('D#');
+  });
+
+  it('noteName: flat keys spell flats', () => {
+    expect(noteName(3, { root: 0, quality: 'minor' })).toBe('Eb');
+    expect(noteName(10, { root: 5, quality: 'major' })).toBe('Bb');
+  });
+
+  it.each([
+    // [root, quality, pitch class, expected name]: a characteristic note of each flat key
+    [5, 'major', 10, 'Bb'],
+    [10, 'major', 3, 'Eb'],
+    [3, 'major', 8, 'Ab'],
+    [8, 'major', 1, 'Db'],
+    [1, 'major', 6, 'Gb'],
+    [2, 'minor', 10, 'Bb'],
+    [7, 'minor', 3, 'Eb'],
+    [0, 'minor', 8, 'Ab'],
+    [5, 'minor', 1, 'Db'],
+    [10, 'minor', 6, 'Gb'],
+    // sharp-key controls
+    [7, 'major', 6, 'F#'],
+    [4, 'minor', 6, 'F#'],
+    [2, 'major', 1, 'C#'],
+  ] as const)('noteName: key %i %s spells pc %i as %s', (root, quality, pc, name) => {
+    expect(noteName(pc, { root, quality })).toBe(name);
+  });
+
+  it('noteName: exactly the ten flat keys spell flats, all 24 keys covered', () => {
+    const flatKeys = new Set(['major 5', 'major 10', 'major 3', 'major 8', 'major 1', 'minor 2', 'minor 7', 'minor 0', 'minor 5', 'minor 10']);
+    const seen: string[] = [];
+    for (const quality of ['major', 'minor'] as const) {
+      for (let root = 0; root < 12; root++) {
+        const names = Array.from({ length: 12 }, (_, pc) => noteName(pc, { root, quality }));
+        const spelling = names.some((n) => n.endsWith('b')) ? 'flat' : 'sharp';
+        // Each key is all flats or all sharps, never mixed.
+        expect(names.some((n) => n.includes('#')) && spelling === 'flat', `${quality} ${root}`).toBe(false);
+        expect(spelling, `${quality} ${root}`).toBe(flatKeys.has(`${quality} ${root}`) ? 'flat' : 'sharp');
+        seen.push(`${quality} ${root}`);
+      }
+    }
+    expect(seen).toHaveLength(24);
+    expect(flatKeys.size).toBe(10);
+  });
+
   it('computes semitones from root modulo 12', () => {
     expect(semitonesFromRoot(4, 5, 9)).toBe(0);
     expect(semitonesFromRoot(4, 0, 9)).toBe(7);

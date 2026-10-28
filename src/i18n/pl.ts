@@ -14,6 +14,7 @@ export const pl = {
     pages: 'Strony',
     language: 'Język',
     home: 'Strona główna',
+    wakeLock: 'Ekran nie gaśnie',
   },
   langName: {
     pl: 'Polski',
@@ -38,11 +39,11 @@ export const pl = {
   caged: {
     title: 'System CAGED — pięć kształtów dla akordów C, A, G, E i D',
     subtitle:
-      'Każdy z pięciu podstawowych akordów durowych zagrany pięcioma kształtami CAGED na progach 0–15. Kolejność kształtów jest zawsze ta sama: C → A → G → E → D → C… Zmienia się tylko kształt, od którego zaczynasz przy siodełku. Strój standardowy E A D G B E.',
+      'Każdy z pięciu podstawowych akordów durowych lub molowych zagrany pięcioma kształtami CAGED na progach 0–15. Kolejność kształtów jest zawsze ta sama: C → A → G → E → D → C… Zmienia się tylko kształt, od którego zaczynasz przy siodełku. Strój standardowy E A D G B E.',
     facts: [
       {
         title: 'Jak czytać',
-        body: 'Kolor to kształt. Kropka R to pryma (nazwa akordu), 3 to tercja, 5 to kwinta. Ten sam kolor w dwóch miejscach to ten sam kształt powtórzony 12 progów wyżej.',
+        body: 'Kolor to kształt. Kropka R to pryma (nazwa akordu), 3 to tercja wielka, b3 to tercja mała, 5 to kwinta. Ten sam kolor w dwóch miejscach to ten sam kształt powtórzony 12 progów wyżej.',
       },
       {
         title: 'Zasada przesuwania',
@@ -58,12 +59,20 @@ export const pl = {
     all: 'wszystkie',
     chordGroupAria: 'Tonacja',
     shapeGroupAria: 'Kształt',
+    quality: {
+      label: 'Tryb:',
+      groupAria: 'Tryb akordu',
+      minor: 'moll',
+      major: 'dur',
+    },
     legend: {
       root: 'R — pryma',
       third: '3 — tercja wielka',
+      thirdMinor: 'b3 — tercja mała',
       fifth: '5 — kwinta',
     },
     chordHeading: 'Akord {key}-dur',
+    chordHeadingMinor: 'Akord {key}-moll',
     tones: 'dźwięki:',
     order: 'Od siodełka w górę:',
     orderRepeat: '(12 progów wyżej)',
@@ -73,5 +82,38 @@ export const pl = {
     tileRoot: 'pryma:',
     boardAria: 'Pięć kształtów CAGED akordu {key}-dur na progach 0 do {max}',
     boardRegionAria: 'Gryf akordu {key}-dur',
+    boardAriaMinor: 'Pięć kształtów CAGED akordu {key}-moll na progach 0 do {max}',
+    boardRegionAriaMinor: 'Gryf akordu {key}-moll',
+    hardShape: 'trudny do zagrania w całości — zwykle grany częściowo',
+  },
+  pentatonic: {
+    title: 'Pentatonika z akordami tonacji',
+    subtitle:
+      'Pięć pudełek pentatoniki molowej lub durowej na progach 0–15. Kolor pudełka to kolor kształtu CAGED, który w nim siedzi. Akordy tonacji wybierasz kilka naraz: każdy ma swój kolor, więc grając skalę widzisz jego kształt w każdym pudełku. Strój standardowy E A D G B E.',
+    rootLabel: 'Pryma:',
+    rootGroupAria: 'Pryma',
+    quality: {
+      label: 'Skala:',
+      groupAria: 'Skala',
+      minor: 'moll',
+      major: 'dur',
+    },
+    boxLabel: 'Pudełko:',
+    boxGroupAria: 'Pudełko',
+    all: 'wszystkie',
+    chordLabel: 'Akordy:',
+    chordGroupAria: 'Akordy tonacji',
+    clear: 'wyczyść',
+    keyName: '{note}-{quality}',
+    relative: '{key} pentatonika: te same dźwięki co {rel}.',
+    legend: {
+      root: 'pryma skali',
+      scale: 'reszta skali (stopień)',
+      outside: 'dźwięk akordu spoza pentatoniki',
+    },
+    tile: 'Pudełko {n}',
+    tileDetail: 'kształt {shape} · progi {ranges}',
+    boardAria: 'Pentatonika {key} na progach 0–{max}',
+    boardRegionAria: 'Gryf: pentatonika {key}',
   },
 };
