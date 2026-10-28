@@ -40,6 +40,15 @@ describe('dictionaries', () => {
     expect(t('en').caged.subtitle).toContain('E A D G B E');
   });
 
+  it('caged subtitle and how-to-read fact are quality-neutral', () => {
+    const pl = t('pl').caged;
+    const en = t('en').caged;
+    expect(pl.subtitle).toContain('durowych lub molowych');
+    expect(en.subtitle).toContain('major or minor chords');
+    expect(pl.facts[0].body).toContain('b3 to tercja mała');
+    expect(en.facts[0].body).toContain('b3 is the minor third');
+  });
+
   it('pl and en templates use the same placeholders', () => {
     const pl = flatten(t('pl'));
     const en = flatten(t('en'));
@@ -60,8 +69,9 @@ describe('dictionaries', () => {
     expect(en.legend.thirdMinor).toBe('b3 — minor third');
     expect(pl.hardShape).toBe('trudny do zagrania w całości — zwykle grany częściowo');
     expect(en.hardShape).toBe('hard to play in full — usually played in part');
+    expect(pl.chordHeadingMinor).toBe('Akord {key}-moll');
+    expect(en.chordHeadingMinor).toBe('{key} minor');
     for (const d of [pl, en]) {
-      expect(d.chordHeadingMinor).toContain('{key}m');
       expect(d.boardAriaMinor).toContain('{max}');
       expect(d.boardRegionAriaMinor).toContain('{key}');
     }

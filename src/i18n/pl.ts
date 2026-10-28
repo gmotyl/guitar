@@ -39,11 +39,11 @@ export const pl = {
   caged: {
     title: 'System CAGED — pięć kształtów dla akordów C, A, G, E i D',
     subtitle:
-      'Każdy z pięciu podstawowych akordów durowych zagrany pięcioma kształtami CAGED na progach 0–15. Kolejność kształtów jest zawsze ta sama: C → A → G → E → D → C… Zmienia się tylko kształt, od którego zaczynasz przy siodełku. Strój standardowy E A D G B E.',
+      'Każdy z pięciu podstawowych akordów durowych lub molowych zagrany pięcioma kształtami CAGED na progach 0–15. Kolejność kształtów jest zawsze ta sama: C → A → G → E → D → C… Zmienia się tylko kształt, od którego zaczynasz przy siodełku. Strój standardowy E A D G B E.',
     facts: [
       {
         title: 'Jak czytać',
-        body: 'Kolor to kształt. Kropka R to pryma (nazwa akordu), 3 to tercja, 5 to kwinta. Ten sam kolor w dwóch miejscach to ten sam kształt powtórzony 12 progów wyżej.',
+        body: 'Kolor to kształt. Kropka R to pryma (nazwa akordu), 3 to tercja wielka, b3 to tercja mała, 5 to kwinta. Ten sam kolor w dwóch miejscach to ten sam kształt powtórzony 12 progów wyżej.',
       },
       {
         title: 'Zasada przesuwania',
@@ -72,7 +72,7 @@ export const pl = {
       fifth: '5 — kwinta',
     },
     chordHeading: 'Akord {key}-dur',
-    chordHeadingMinor: 'Akord {key}m',
+    chordHeadingMinor: 'Akord {key}-moll',
     tones: 'dźwięki:',
     order: 'Od siodełka w górę:',
     orderRepeat: '(12 progów wyżej)',

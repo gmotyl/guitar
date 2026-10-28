@@ -147,7 +147,7 @@ describe('CagedExplorer', () => {
     expect(container.querySelectorAll('.shape-card .hard')).toHaveLength(0);
   });
 
-  it('CagedExplorer: minor switches cards to Cm Am Gm Em Dm', () => {
+  it('CagedExplorer: minor switches cards to C-moll A-moll G-moll E-moll D-moll', () => {
     const { container } = renderExplorer();
     fireEvent.click(chip(qualityGroup(), 'moll'));
     expect(chip(qualityGroup(), 'moll').getAttribute('aria-pressed')).toBe('true');
@@ -155,7 +155,7 @@ describe('CagedExplorer', () => {
     const cs = cards(container);
     expect(cs.map((c) => c.dataset.key)).toEqual(['C', 'A', 'G', 'E', 'D']);
     expect(cs.map((c) => text(c.querySelector('h2')).split(' dźwięki: ')[0])).toEqual(
-      ['Cm', 'Am', 'Gm', 'Em', 'Dm'].map((n) => `Akord ${n}`),
+      ['C', 'A', 'G', 'E', 'D'].map((n) => `Akord ${n}-moll`),
     );
     expect(text(cs[0].querySelector('h2 small'))).toBe('dźwięki: C · Eb · G');
     expect(text(cs[2].querySelector('h2 small'))).toBe('dźwięki: G · Bb · D');
@@ -211,10 +211,25 @@ describe('CagedExplorer', () => {
     expect(within(group).getAllByRole('button').map((b) => b.textContent)).toEqual(['minor', 'major']);
     fireEvent.click(chip(group, 'minor'));
     const cs = cards(container);
-    expect(text(cs[0].querySelector('h2'))).toBe('Cm chord notes: C · Eb · G');
+    expect(text(cs[0].querySelector('h2'))).toBe('C minor notes: C · Eb · G');
     expect(text(cs[0].querySelector('.shape-card .hard'))).toBe('hard to play in full — usually played in part');
     expect(text(container.querySelector('.legend > span:nth-child(2)'))).toBe('b3 — minor third');
     expect(cs[0].querySelector('.board')!.getAttribute('aria-label')).toBe('Fretboard of the C minor chord');
+  });
+
+  it('CagedExplorer: minor board svg aria-label names the minor chord (pl and en)', () => {
+    const cases = [
+      ['pl', 'Tryb akordu', 'moll', 'Pięć kształtów CAGED akordu C-moll na progach 0 do 15', 'Pięć kształtów CAGED akordu C-dur na progach 0 do 15'],
+      ['en', 'Chord quality', 'minor', 'The five CAGED shapes of the C minor chord on frets 0 to 15', 'The five CAGED shapes of the C major chord on frets 0 to 15'],
+    ] as const;
+    for (const [lang, groupName, minorName, minorAria, majorAria] of cases) {
+      const { container } = renderExplorer(lang);
+      const svgAria = () => cards(container)[0].querySelector('.board svg')!.getAttribute('aria-label');
+      expect(svgAria()).toBe(majorAria);
+      fireEvent.click(chip(screen.getByRole('group', { name: groupName }), minorName));
+      expect(svgAria()).toBe(minorAria);
+      cleanup();
+    }
   });
 
   it('CagedExplorer: filters survive the quality switch', () => {
@@ -223,7 +238,7 @@ describe('CagedExplorer', () => {
     fireEvent.click(chip(shapeGroup(), 'E'));
     fireEvent.click(chip(qualityGroup(), 'moll'));
     const visible = cards(container).filter((c) => !c.hidden);
-    expect(visible.map((c) => text(c.querySelector('h2')).split(' dźwięki')[0])).toEqual(['Akord Am']);
+    expect(visible.map((c) => text(c.querySelector('h2')).split(' dźwięki')[0])).toEqual(['Akord A-moll']);
     expect(chip(chordGroup(), 'A').getAttribute('aria-pressed')).toBe('true');
     expect(chip(shapeGroup(), 'E').getAttribute('aria-pressed')).toBe('true');
     const nodes = Array.from(visible[0].querySelectorAll('[data-role="band"], [data-role="dot"], .shape-card'));

@@ -37,11 +37,11 @@ export const en: Dict = {
   caged: {
     title: 'The CAGED system — five shapes for the C, A, G, E and D chords',
     subtitle:
-      'Each of the five basic major chords played with the five CAGED shapes on frets 0–15. The order of the shapes is always the same: C → A → G → E → D → C… Only the shape you start with at the nut changes. Standard tuning E A D G B E.',
+      'Each of the five basic major or minor chords played with the five CAGED shapes on frets 0–15. The order of the shapes is always the same: C → A → G → E → D → C… Only the shape you start with at the nut changes. Standard tuning E A D G B E.',
     facts: [
       {
         title: 'How to read it',
-        body: 'Color is the shape. The R dot is the root (the chord’s name), 3 is the major third, 5 is the fifth. The same color in two places is the same shape repeated 12 frets higher.',
+        body: 'Color is the shape. The R dot is the root (the chord’s name), 3 is the major third, b3 is the minor third, 5 is the fifth. The same color in two places is the same shape repeated 12 frets higher.',
       },
       {
         title: 'Moving a shape',
@@ -70,7 +70,7 @@ export const en: Dict = {
       fifth: '5 — fifth',
     },
     chordHeading: '{key} major',
-    chordHeadingMinor: '{key}m chord',
+    chordHeadingMinor: '{key} minor',
     tones: 'notes:',
     order: 'From the nut up:',
     orderRepeat: '(12 frets higher)',
