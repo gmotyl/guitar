@@ -1,7 +1,8 @@
 # guitar
 
 Source of [guitar.motyl.dev](https://guitar.motyl.dev): guitar learning pages in Polish and English.
-The first page is a CAGED system explorer.
+Pages: a CAGED system explorer (major and minor) and the pentatonic scale with the key chords
+overlaid. The screen stays on while a page is open (switch in the menu).
 
 Astro (static output) with Preact islands, served by Cloudflare Workers static assets.
 
