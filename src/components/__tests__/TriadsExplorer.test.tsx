@@ -986,6 +986,25 @@ describe('TriadsExplorer — state in the URL', () => {
     expect(count(r.container)).toMatch(/^1 \/ /);
   });
 
+  it('an explicit default key survives the URL rewrite and a reload', () => {
+    visit('?mode=changes&prog=C&key=7');
+    renderExplorer();
+    expect(pressed('Tonacja')).toEqual(['G']);
+    expect(location.search).toBe('?mode=changes&prog=C&key=7');
+    cleanup();
+    // Names moved to G by a key pick detect as C on their own; the reload keeps G.
+    visit('');
+    openChanges();
+    typeProg('Db C F');
+    click('Tonacja', 'G');
+    expect(field().value).toBe('A♭ G C');
+    cleanup();
+    renderExplorer();
+    expect(field().value).toBe('A♭ G C');
+    expect(pressed('Tonacja')).toEqual(['G']);
+    expect(tileNames()).toBe('A♭ G C');
+  });
+
   it('state changes replace the URL query', () => {
     visit('');
     const replace = vi.spyOn(history, 'replaceState');

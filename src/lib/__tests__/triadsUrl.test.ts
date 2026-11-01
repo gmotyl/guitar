@@ -76,6 +76,18 @@ describe('triadsUrl', () => {
     ).toBe('?mode=changes&start=2&overlay=scale');
   });
 
+  it('keeps the default key when typed names would detect another', () => {
+    // `C` alone and `A♭ G C` detect as C: dropping `key=7` would restore C.
+    const inG = (src: string) =>
+      writeTriadsQuery({ ...DEFAULT_STATE, mode: 'changes', changes: { ...DEFAULT_STATE.changes, src } });
+    expect(inG('C')).toBe('?mode=changes&prog=C&key=7');
+    expect(inG('A♭ G C')).toBe('?mode=changes&prog=A%E2%99%AD+G+C&key=7');
+    // Names that detect as G and Numbers leave the default key out.
+    expect(inG('G C D')).toBe('?mode=changes&prog=G+C+D');
+    expect(inG('1 4 5')).toBe('?mode=changes&prog=1+4+5');
+    expect(inG('G X')).toBe('?mode=changes&prog=G+X');
+  });
+
   it('round-trips a state through the query', () => {
     const states: TriadsState[] = [
       DEFAULT_STATE,

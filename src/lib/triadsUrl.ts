@@ -2,12 +2,14 @@
  * Triads page state <-> URL query. Parameters: `mode` (`changes`; absent = Inversions), `root`
  * (0–11), `q` (`maj` | `min`), `set`, `i` (index), `prog` (field text), `key` (0–11), `start` (≥ 0),
  * `overlay` (`penta` | `scale`). Only non-default values are written; invalid or missing values read
- * as the default.
+ * as the default. A missing `key` with typed chord names means their detected key, so the writer
+ * also keeps the default key when the names would detect another.
  *
  * `set` is shared by both modes and belongs to the active one: in Inversions it may also be `all`,
  * in Chord changes it is one of the four string sets. The inactive mode's set is not written.
  */
 import type { PitchClass } from './music/notes';
+import { parseProgression } from './music/progression';
 import type { StringSetId, TriadQuality } from './music/triads';
 
 export type Overlay = 'none' | 'penta' | 'scale';
@@ -39,6 +41,11 @@ const pitchClass = (v: string | null): PitchClass | null => {
   return n !== null && n <= 11 ? n : null;
 };
 const setId = (v: string | null): StringSetId | null => SET_IDS.find((id) => id === v) ?? null;
+
+function namesDetectOtherKey(src: string, key: PitchClass): boolean {
+  const r = parseProgression(src, key);
+  return r.ok && r.kind === 'names' && r.key !== key;
+}
 
 /** Parse a query string (with or without the leading `?`). */
 export function readTriadsQuery(search: string): TriadsState {
@@ -79,7 +86,9 @@ export function writeTriadsQuery(state: TriadsState): string {
   if (set !== defaultSet) p.set('set', set);
   if (inv.index !== d.inversions.index) p.set('i', String(inv.index));
   if (ch.src !== d.changes.src) p.set('prog', ch.src);
-  if (ch.key !== d.changes.key) p.set('key', String(ch.key));
+  // A reader without `key` detects the key of typed names, so the default key is kept whenever the
+  // names would detect another one (`A♭ G C` in G).
+  if (ch.key !== d.changes.key || namesDetectOtherKey(ch.src, ch.key)) p.set('key', String(ch.key));
   if (ch.start !== d.changes.start) p.set('start', String(ch.start));
   if (ch.overlay !== d.changes.overlay) p.set('overlay', ch.overlay);
   const query = p.toString();
