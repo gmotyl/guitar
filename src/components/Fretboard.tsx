@@ -36,6 +36,14 @@ export interface FretOutline {
   /** Dashed stroke and no fill (a CAGED position window). */
   dashed?: boolean;
 }
+/** A Triad drawn as a round-capped band through its three cells (under the dots). */
+export interface FretPath {
+  cells: [{ string: number; fret: number }, { string: number; fret: number }, { string: number; fret: number }];
+  color: string;
+  /** A Triad of the path that is not the current one: a fainter band. */
+  dashed?: boolean;
+  group?: string;
+}
 export interface FretboardProps {
   orientation: 'horizontal' | 'vertical';
   frets?: number /* 15 */;
@@ -43,6 +51,8 @@ export interface FretboardProps {
   bands?: FretBand[];
   dimmedGroups?: string[];
   outlines?: FretOutline[];
+  /** Triad paths: bands drawn under the dots. */
+  paths?: FretPath[];
   ariaLabel: string;
   /**
    * Makes each fret column 0..frets clickable (all six strings), pointer-only:
@@ -61,6 +71,10 @@ const RING_R = 14;
 /** Outline padding around the outermost dot centres, along and across. */
 const PAD = 18;
 const STRINGS = TUNING.length; // 6
+/** Triad path band width and opacity (filled / dashed), as in the mockup. */
+const PATH_W = 30;
+const PATH_OP = 0.22;
+const PATH_OP_DASHED = 0.07;
 
 /**
  * Board geometry expressed along two axes: `along` runs with the frets
@@ -231,6 +245,7 @@ export function Fretboard({
   bands = [],
   dimmedGroups = [],
   outlines = [],
+  paths = [],
   ariaLabel,
   onFretClick,
   onBandClick,
@@ -406,6 +421,25 @@ export function Fretboard({
               stroke-linejoin="round"
               pointer-events={passThrough}
               opacity={o.dimmed ? DIM : opacityFor(o.group, dimmedGroups)}
+            />
+          ))}
+        </g>
+      )}
+      {paths.length > 0 && (
+        <g>
+          {paths.map((p, i) => (
+            <polyline
+              key={`t${i}`}
+              data-role="triad-path"
+              data-group={p.group}
+              points={p.cells.map((c) => g.xy(g.cellAt(c.fret), g.stringAt(c.string)).join(',')).join(' ')}
+              fill="none"
+              stroke={p.color}
+              stroke-width={PATH_W}
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              opacity={(p.dashed ? PATH_OP_DASHED : PATH_OP) * opacityFor(p.group, dimmedGroups)}
+              pointer-events={passThrough}
             />
           ))}
         </g>
