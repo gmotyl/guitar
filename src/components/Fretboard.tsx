@@ -17,6 +17,10 @@ export interface FretDot {
   ring?: boolean;
   /** Dims this dot alone, independently of `dimmedGroups`. */
   dimmed?: boolean;
+  /** Smaller dot (a soloing overlay): its radius; an outline dot then labels in its own colour. */
+  radius?: number;
+  /** Explicit dot opacity (a soloing overlay); wins over `dimmed` and `dimmedGroups`. */
+  opacity?: number;
 }
 export interface FretBand {
   from: number;
@@ -36,6 +40,14 @@ export interface FretOutline {
   /** Dashed stroke and no fill (a CAGED position window). */
   dashed?: boolean;
 }
+/** A Triad drawn as a round-capped band through its three cells (under the dots). */
+export interface FretPath {
+  cells: [{ string: number; fret: number }, { string: number; fret: number }, { string: number; fret: number }];
+  color: string;
+  /** A Triad of the path that is not the current one: a fainter band. */
+  dashed?: boolean;
+  group?: string;
+}
 export interface FretboardProps {
   orientation: 'horizontal' | 'vertical';
   frets?: number /* 15 */;
@@ -43,6 +55,8 @@ export interface FretboardProps {
   bands?: FretBand[];
   dimmedGroups?: string[];
   outlines?: FretOutline[];
+  /** Triad paths: bands drawn under the dots. */
+  paths?: FretPath[];
   ariaLabel: string;
   /**
    * Makes each fret column 0..frets clickable (all six strings), pointer-only:
@@ -61,6 +75,10 @@ const RING_R = 14;
 /** Outline padding around the outermost dot centres, along and across. */
 const PAD = 18;
 const STRINGS = TUNING.length; // 6
+/** Triad path band width and opacity (filled / dashed), as in the mockup. */
+const PATH_W = 30;
+const PATH_OP = 0.22;
+const PATH_OP_DASHED = 0.07;
 
 /**
  * Board geometry expressed along two axes: `along` runs with the frets
@@ -231,6 +249,7 @@ export function Fretboard({
   bands = [],
   dimmedGroups = [],
   outlines = [],
+  paths = [],
   ariaLabel,
   onFretClick,
   onBandClick,
@@ -410,6 +429,25 @@ export function Fretboard({
           ))}
         </g>
       )}
+      {paths.length > 0 && (
+        <g>
+          {paths.map((p, i) => (
+            <polyline
+              key={`t${i}`}
+              data-role="triad-path"
+              data-group={p.group}
+              points={p.cells.map((c) => g.xy(g.cellAt(c.fret), g.stringAt(c.string)).join(',')).join(' ')}
+              fill="none"
+              stroke={p.color}
+              stroke-width={PATH_W}
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              opacity={(p.dashed ? PATH_OP_DASHED : PATH_OP) * opacityFor(p.group, dimmedGroups)}
+              pointer-events={passThrough}
+            />
+          ))}
+        </g>
+      )}
       <g>
         {dots.map((d, i) => {
           const [x, y] = g.xy(g.cellAt(d.fret), g.stringAt(d.string));
@@ -429,7 +467,7 @@ export function Fretboard({
               data-group={d.group}
               data-string={d.string}
               data-fret={d.fret}
-              opacity={d.dimmed ? DOT_DIM : opacityFor(d.group, dimmedGroups)}
+              opacity={d.opacity ?? (d.dimmed ? DOT_DIM : opacityFor(d.group, dimmedGroups))}
               pointer-events={passThrough}
             >
               {split ? (
@@ -455,10 +493,10 @@ export function Fretboard({
                 <circle
                   cx={x}
                   cy={y}
-                  r={DOT_R}
+                  r={d.radius ?? DOT_R}
                   fill={d.variant === 'filled' && d.colors?.length === 1 ? d.colors[0] : fill}
                   stroke={d.color}
-                  stroke-width={2.5}
+                  stroke-width={d.radius != null ? 1.4 : 2.5}
                   stroke-dasharray={d.variant === 'dashed' ? '3 2' : undefined}
                 />
               )}
@@ -469,9 +507,17 @@ export function Fretboard({
                 x={x}
                 y={y + 4}
                 text-anchor="middle"
-                font-size={11}
+                font-size={d.radius != null ? 9.5 : 11}
                 font-weight={700}
-                fill={d.variant === 'outline' ? 'var(--fg)' : d.variant === 'dashed' ? d.color : 'var(--on)'}
+                fill={
+                  d.variant === 'outline'
+                    ? d.radius != null
+                      ? d.color
+                      : 'var(--fg)'
+                    : d.variant === 'dashed'
+                      ? d.color
+                      : 'var(--on)'
+                }
               >
                 {d.label}
               </text>

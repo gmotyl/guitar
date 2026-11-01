@@ -1,0 +1,18 @@
+---
+import Site from '../../layouts/Site.astro';
+import { TriadsExplorer } from '../../components/TriadsExplorer';
+import { LANGS, t, type Lang } from '../../i18n';
+import '../../components/triads.css';
+
+export function getStaticPaths() {
+  return LANGS.map((lang) => ({ params: { lang } }));
+}
+
+const lang = Astro.params.lang as Lang;
+const dict = t(lang);
+---
+<Site lang={lang} title={dict.triads.title} slug="triads">
+  <h1>{dict.triads.title}</h1>
+  <p class="sub">{dict.triads.subtitle}</p>
+  <TriadsExplorer client:load lang={lang} t={dict.triads} />
+</Site>

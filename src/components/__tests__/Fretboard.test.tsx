@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render } from '@testing-library/preact';
-import { Fretboard, type FretDot, type FretBand } from '../Fretboard';
+import { Fretboard, type FretDot, type FretBand, type FretPath } from '../Fretboard';
 import { boxes } from '../../lib/music/scales';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -675,5 +675,141 @@ describe('Fretboard outline pass-through and open-string column', () => {
       expect(container.innerHTML).toMatchSnapshot(`pentatonic ${orientation}`);
       unmount();
     }
+  });
+});
+
+describe('Fretboard Triad paths', () => {
+  // G/B on G-B-e at 4-3-3 (strings 2, 1, 0 = G, B, high e).
+  const gOverB: FretPath['cells'] = [
+    { string: 2, fret: 4 },
+    { string: 1, fret: 3 },
+    { string: 0, fret: 3 },
+  ];
+  const triadDots: FretDot[] = gOverB.map((c, i) => ({
+    ...c,
+    label: ['3', '5', 'R'][i],
+    color: 'var(--k0)',
+    variant: 'filled' as const,
+  }));
+  const pathPoints = (el: Element) =>
+    el
+      .getAttribute('points')!
+      .trim()
+      .split(/\s+/)
+      .map((p) => p.split(',').map(Number));
+  const centre = (container: Element, s: number, f: number) => {
+    const d = all(container, 'dot').find(
+      (e) => e.getAttribute('data-string') === String(s) && e.getAttribute('data-fret') === String(f),
+    )!;
+    const c = d.querySelector('circle')!;
+    return [num(c, 'cx'), num(c, 'cy')];
+  };
+
+  it('draws a filled Triad path under the dots', () => {
+    const { container } = render(
+      <Fretboard
+        orientation="horizontal"
+        dots={triadDots}
+        paths={[{ cells: gOverB, color: 'var(--k0)' }]}
+        ariaLabel="b"
+      />,
+    );
+    const paths = all(container, 'triad-path');
+    expect(paths).toHaveLength(1);
+    const p = paths[0];
+    expect(p.getAttribute('stroke')).toBe('var(--k0)');
+    expect(p.getAttribute('stroke-linecap')).toBe('round');
+    expect(p.getAttribute('fill')).toBe('none');
+    expect(pathPoints(p)).toEqual(gOverB.map((c) => centre(container, c.string, c.fret)));
+    // Under the dots: the band precedes every dot in document order.
+    const firstDot = all(container, 'dot')[0];
+    expect(p.compareDocumentPosition(firstDot) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('draws a dashed Triad path fainter', () => {
+    const { container } = render(
+      <Fretboard
+        orientation="horizontal"
+        dots={[]}
+        paths={[
+          { cells: gOverB, color: 'var(--k0)' },
+          { cells: gOverB.map((c) => ({ ...c, fret: c.fret + 5 })) as FretPath['cells'], color: 'var(--k1)', dashed: true },
+        ]}
+        ariaLabel="b"
+      />,
+    );
+    const [filled, dashed] = all(container, 'triad-path');
+    expect(dashed.getAttribute('stroke')).toBe('var(--k1)');
+    expect(num(dashed, 'opacity')).toBeGreaterThan(0);
+    expect(num(dashed, 'opacity')).toBeLessThan(num(filled, 'opacity'));
+  });
+
+  it('draws Triad paths on a vertical board', () => {
+    const { container } = render(
+      <Fretboard
+        orientation="vertical"
+        dots={triadDots}
+        paths={[{ cells: gOverB, color: 'var(--k0)' }]}
+        ariaLabel="b"
+      />,
+    );
+    const pts = pathPoints(all(container, 'triad-path')[0]);
+    expect(pts).toEqual(gOverB.map((c) => centre(container, c.string, c.fret)));
+    // Vertical: strings run across x (high e right), frets down y.
+    expect(pts[2][0]).toBeGreaterThan(pts[0][0]);
+    expect(pts[0][1]).toBeGreaterThan(pts[1][1]);
+  });
+
+  it('boards without paths are unchanged', () => {
+    const snap = readFileSync(join(process.cwd(), 'src/components/__tests__/__snapshots__/Fretboard.test.tsx.snap'), 'utf8');
+    const stored = (name: string) => {
+      const m = snap.match(new RegExp('exports\\[`' + name + '`\\] = `"([\\s\\S]*?)"`;'));
+      expect(m, name).not.toBeNull();
+      return m![1];
+    };
+    const am = boxes({ root: 9, quality: 'minor' }, 15);
+    const outlines = am.map((b) => ({ group: `box-${b.n}`, color: 'var(--c)', cells: b.cells }));
+    const boxDots: FretDot[] = am.flatMap((b) =>
+      b.cells.map((c) => ({ ...c, label: '', color: 'var(--c)', variant: 'outline' as const, group: `box-${b.n}` })),
+    );
+    const boxBands: FretBand[] = am
+      .filter((b) => !b.copy)
+      .map((b) => ({ from: b.from, to: b.to, color: 'var(--c)', label: String(b.n), group: `box-${b.n}` }));
+    for (const orientation of ['horizontal', 'vertical'] as const) {
+      for (const paths of [undefined, []]) {
+        const caged = render(
+          <Fretboard orientation={orientation} dots={dots} bands={bands} dimmedGroups={['A']} paths={paths} ariaLabel="CAGED C" />,
+        );
+        expect(caged.container.innerHTML).toBe(
+          stored(`Fretboard > Fretboard: existing props render unchanged > ${orientation} 1`),
+        );
+        caged.unmount();
+        const penta = render(
+          <Fretboard
+            orientation={orientation}
+            dots={boxDots}
+            bands={boxBands}
+            outlines={outlines}
+            paths={paths}
+            ariaLabel="A minor pentatonic"
+          />,
+        );
+        expect(penta.container.innerHTML).toBe(
+          stored(`Fretboard outline pass-through and open-string column > pentatonic-style board with outlines renders stably > pentatonic ${orientation} 1`),
+        );
+        penta.unmount();
+      }
+    }
+    // Nashville-style board: split and dashed multi-colour dots, no paths element.
+    const nashville: FretDot[] = [
+      { string: 1, fret: 5, label: 'R', color: 'var(--k0)', variant: 'filled', colors: ['var(--k0)', 'var(--k1)'] },
+      { string: 2, fret: 5, label: '3', color: 'var(--k1)', variant: 'dashed', colors: ['var(--k1)', 'var(--k2)'] },
+    ];
+    const without = render(<Fretboard orientation="horizontal" dots={nashville} ariaLabel="N" />);
+    const html = without.container.innerHTML;
+    expect(all(without.container, 'triad-path')).toHaveLength(0);
+    without.unmount();
+    const empty = render(<Fretboard orientation="horizontal" dots={nashville} paths={[]} ariaLabel="N" />);
+    expect(empty.container.innerHTML).toBe(html);
   });
 });

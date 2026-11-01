@@ -68,6 +68,50 @@ describe('Menu', () => {
     expect(localStorage.getItem('guitar.lang')).toBe('pl');
   });
 
+  it('language switch keeps the current query', () => {
+    const start = location.pathname + location.search;
+    try {
+      // Triads page with a shared progression: the EN link carries the query.
+      history.replaceState(null, '', '/pl/triads?mode=changes&prog=G+C+D+G');
+      renderMenu('pl', 'triads');
+      fireEvent.click(screen.getByRole('button', { name: 'Otwórz menu' }));
+      const en = screen.getByRole('link', { name: 'English' });
+      expect(en.getAttribute('href')).toBe('/en/triads?mode=changes&prog=G+C+D+G');
+
+      // The explorer rewrites the query after load; the link follows it at click time.
+      history.replaceState(null, '', '/pl/triads?mode=changes&prog=C+G+Am+F');
+      en.addEventListener('click', (e) => e.preventDefault()); // keep jsdom from navigating
+      fireEvent.click(en);
+      expect(en.getAttribute('href')).toBe('/en/triads?mode=changes&prog=C+G+Am+F');
+      expect(localStorage.getItem('guitar.lang')).toBe('en');
+
+      // ...and when the menu is opened again after a query change.
+      fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+      history.replaceState(null, '', '/pl/triads?mode=inversions&root=D');
+      fireEvent.click(screen.getByRole('button', { name: 'Otwórz menu' }));
+      expect(screen.getByRole('link', { name: 'English' }).getAttribute('href')).toBe('/en/triads?mode=inversions&root=D');
+      cleanup();
+
+      // A page without a query still links to the bare page.
+      history.replaceState(null, '', '/pl/caged');
+      renderMenu('pl', 'caged');
+      fireEvent.click(screen.getByRole('button', { name: 'Otwórz menu' }));
+      expect(screen.getByRole('link', { name: 'English' }).getAttribute('href')).toBe('/en/caged');
+    } finally {
+      history.replaceState(null, '', start);
+    }
+  });
+
+  it('menu lists the four registry pages', () => {
+    renderMenu('pl', 'triads');
+    fireEvent.click(screen.getByRole('button', { name: 'Otwórz menu' }));
+    const nav = screen.getByRole('navigation');
+    const links = Array.from(nav.querySelectorAll('a')).slice(1);
+    expect(links.map((a) => a.textContent)).toEqual(['System CAGED', 'Pentatonika', 'System Nashville', 'Triady i przewroty']);
+    expect(links[3].getAttribute('href')).toBe('/pl/triads');
+    expect(links[3].getAttribute('aria-current')).toBe('page');
+  });
+
   describe('wake lock switch', () => {
     // Let pending request() promises settle.
     const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
