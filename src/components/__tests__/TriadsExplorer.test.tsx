@@ -301,7 +301,7 @@ describe('TriadsExplorer — Chord changes mode', () => {
       'modes', 'entry', 'controls', 'prog', 'stepper', 'board', 'board', 'legend',
     ]);
     const rows = Array.from(container.querySelectorAll('.controls > *'));
-    expect(rows.map((r) => text(r.querySelector('.lbl')))).toEqual(['Utwory', 'Tonacja', 'Struny']);
+    expect(rows.map((r) => text(r.querySelector('.lbl')))).toEqual(['Utwory', 'Tonacja', 'Struny', 'Gryf']);
     // Utwory: a select with the 13 songs in a group "Utwory", Creep picked.
     const select = songSelect();
     expect(rows[0].contains(select)).toBe(true);
@@ -542,5 +542,166 @@ describe('TriadsExplorer — Chord changes mode', () => {
     expect(field().value).toBe('F C C F B♭ F C F');
     expect(pressed('Tonacja')).toEqual(['F']);
     expect(tiles()).toHaveLength(8);
+  });
+});
+
+// Overlay helpers.
+const OPEN_PC = [4, 11, 7, 2, 9, 4]; // high e … low E
+const LABELS = ['R', 'b2', '2', 'b3', '3', '4', '#4', '5', 'b6', '6', 'b7', '7'];
+const overlayDots = (c: Element) => dots(c).filter((d) => d.getAttribute('data-group') === 'overlay');
+const triadDots = (c: Element) => dots(c).filter((d) => d.getAttribute('data-group') !== 'overlay');
+const radius = (d: Element) => Number(d.querySelector('circle')!.getAttribute('r'));
+const opacity = (d: Element) => Number(d.getAttribute('opacity') ?? '1');
+const switches = () => buttons('Gryf');
+const pentaSwitch = () => switches()[0];
+const scaleSwitch = () => switches()[1];
+const isOn = (b: Element) => b.getAttribute('aria-pressed') === 'true';
+/** Every neck cell (frets 0–15) whose note is in `root` + `intervals`, as cell → label, minus `skip` cells. */
+const expectedOverlay = (root: number, intervals: number[], skip: Set<string>) => {
+  const out = new Map<string, string>();
+  OPEN_PC.forEach((pc, s) => {
+    for (let f = 0; f <= 15; f++) {
+      const iv = (((pc + f - root) % 12) + 12) % 12;
+      if (intervals.includes(iv) && !skip.has(`${s}:${f}`)) out.set(`${s}:${f}`, LABELS[iv]);
+    }
+  });
+  return out;
+};
+const overlayMap = (c: Element) => new Map(overlayDots(c).map((d) => [cell(d), label(d)]));
+const pickTile = (i: number, name = 'Progresja') => fireEvent.click(buttons(name)[i]);
+
+describe('TriadsExplorer — soloing overlays', () => {
+  afterEach(cleanup);
+
+  it('both overlay switches start off', () => {
+    const { container } = openChanges();
+    const rows = Array.from(container.querySelectorAll('.controls > *'));
+    expect(rows.map((r) => text(r.querySelector('.lbl')))).toEqual(['Utwory', 'Tonacja', 'Struny', 'Gryf']);
+    expect(switches().map(text)).toEqual(['pentatonika akordu (G durowa)', 'skala: G jońska']);
+    expect(switches().map(isOn)).toEqual([false, false]);
+    expect(overlayDots(container)).toHaveLength(0);
+    cleanup();
+    openChanges('en');
+    expect(buttons('Neck').map(text)).toEqual(['chord pentatonic (G major)', 'scale: G Ionian']);
+    expect(buttons('Neck').map(isOn)).toEqual([false, false]);
+  });
+
+  it('the Chord pentatonic is faint with a stronger root', () => {
+    const { container } = openChanges();
+    next(); // Creep: current B
+    expect(text(pentaSwitch())).toBe('pentatonika akordu (B durowa)');
+    fireEvent.click(pentaSwitch());
+    expect(isOn(pentaSwitch())).toBe(true);
+    const triadCells = new Set(triadDots(container).map(cell));
+    expect(triadCells.size).toBeGreaterThan(3);
+    const want = expectedOverlay(11, [0, 2, 4, 7, 9], triadCells);
+    expect(overlayMap(container)).toEqual(want);
+    // Labels relative to B: R 2 3 5 6.
+    expect(new Set(want.values())).toEqual(new Set(['R', '2', '3', '5', '6']));
+    const roots = overlayDots(container).filter((d) => label(d) === 'R');
+    const rest = overlayDots(container).filter((d) => label(d) !== 'R');
+    expect(roots.length).toBeGreaterThan(0);
+    // R: filled in the current order colour (tile 2 → --k1), a bit stronger and bigger than the rest.
+    for (const d of roots) {
+      expect(fillOf(d)).toBe('var(--k1)');
+      expect(opacity(d)).toBeCloseTo(0.35);
+      expect(radius(d)).toBe(9);
+    }
+    for (const d of rest) {
+      expect(fillOf(d)).toBe('var(--card)');
+      expect(opacity(d)).toBeCloseTo(0.22);
+      expect(radius(d)).toBe(7.5);
+    }
+    // Triad dots stay full strength, full size and are drawn after (on top of) the overlay.
+    const all = dots(container);
+    const lastOverlay = Math.max(...overlayDots(container).map((d) => all.indexOf(d)));
+    for (const d of triadDots(container)) {
+      expect(all.indexOf(d)).toBeGreaterThan(lastOverlay);
+      expect(opacity(d)).toBe(1);
+      expect(radius(d)).toBeGreaterThan(9);
+    }
+    expect(solidFilled(container).filter((d) => d.getAttribute('data-group') !== 'overlay')).toHaveLength(3);
+  });
+
+  it('the chord scale names its mode', () => {
+    const { container } = openChanges();
+    fireEvent.change(songSelect(), { target: { value: 'wishYouWereHere' } }); // C D Am G in G
+    expect(pressed('Tonacja')).toEqual(['G']);
+    pickTile(2);
+    expect(text(scaleSwitch())).toBe('skala: A dorycka');
+    fireEvent.click(scaleSwitch());
+    expect(isOn(scaleSwitch())).toBe(true);
+    const triadCells = new Set(triadDots(container).map(cell));
+    expect(overlayMap(container)).toEqual(expectedOverlay(9, [0, 2, 3, 5, 7, 9, 10], triadCells));
+    const roots = overlayDots(container).filter((d) => label(d) === 'R');
+    expect(roots.length).toBeGreaterThan(0);
+    for (const d of roots) {
+      expect(fillOf(d)).toBe('var(--k2)');
+      expect(opacity(d)).toBeGreaterThan(opacity(overlayDots(container).find((x) => label(x) !== 'R')!));
+    }
+    cleanup();
+    openChanges('en');
+    fireEvent.change(screen.getByLabelText<HTMLSelectElement>('Songs'), { target: { value: 'wishYouWereHere' } });
+    pickTile(2, 'Progression');
+    expect(text(buttons('Neck')[1])).toBe('scale: A Dorian');
+  });
+
+  it('chords outside the key get Mixolydian or Dorian', () => {
+    const { container } = openChanges(); // Creep in G
+    fireEvent.click(scaleSwitch());
+    pickTile(1); // B
+    expect(text(scaleSwitch())).toBe('skala: B miksolidyjska');
+    let cells = new Set(triadDots(container).map(cell));
+    expect(overlayMap(container)).toEqual(expectedOverlay(11, [0, 2, 4, 5, 7, 9, 10], cells));
+    pickTile(3); // Cm
+    expect(text(scaleSwitch())).toBe('skala: C dorycka');
+    cells = new Set(triadDots(container).map(cell));
+    expect(overlayMap(container)).toEqual(expectedOverlay(0, [0, 2, 3, 5, 7, 9, 10], cells));
+    cleanup();
+    openChanges('en');
+    pickTile(1, 'Progression');
+    expect(text(buttons('Neck')[1])).toBe('scale: B Mixolydian');
+  });
+
+  it('overlays are exclusive', () => {
+    const { container } = openChanges();
+    next(); // B
+    fireEvent.click(pentaSwitch());
+    expect(switches().map(isOn)).toEqual([true, false]);
+    fireEvent.click(scaleSwitch());
+    expect(switches().map(isOn)).toEqual([false, true]);
+    // Only the scale is drawn: B Mixolydian has the 4 and b7, the pentatonic has neither.
+    let cells = new Set(triadDots(container).map(cell));
+    expect(overlayMap(container)).toEqual(expectedOverlay(11, [0, 2, 4, 5, 7, 9, 10], cells));
+    fireEvent.click(pentaSwitch());
+    expect(switches().map(isOn)).toEqual([true, false]);
+    cells = new Set(triadDots(container).map(cell));
+    expect(overlayMap(container)).toEqual(expectedOverlay(11, [0, 2, 4, 7, 9], cells));
+    // Pressing the switch that is on turns it off.
+    fireEvent.click(pentaSwitch());
+    expect(switches().map(isOn)).toEqual([false, false]);
+    expect(overlayDots(container)).toHaveLength(0);
+  });
+
+  it('overlays follow the current chord', () => {
+    const { container } = openChanges(); // Creep: G B C Cm in G
+    fireEvent.click(pentaSwitch());
+    let cells = new Set(triadDots(container).map(cell));
+    expect(overlayMap(container)).toEqual(expectedOverlay(7, [0, 2, 4, 7, 9], cells));
+    next();
+    next(); // C
+    expect(text(pentaSwitch())).toBe('pentatonika akordu (C durowa)');
+    cells = new Set(triadDots(container).map(cell));
+    expect(overlayMap(container)).toEqual(expectedOverlay(0, [0, 2, 4, 7, 9], cells));
+    next(); // Cm
+    expect(text(pentaSwitch())).toBe('pentatonika akordu (Cm molowa)');
+    cells = new Set(triadDots(container).map(cell));
+    expect(overlayMap(container)).toEqual(expectedOverlay(0, [0, 3, 5, 7, 10], cells));
+    for (const d of overlayDots(container).filter((x) => label(x) === 'R')) expect(fillOf(d)).toBe('var(--k3)');
+    fireEvent.click(scaleSwitch());
+    prev(); // C in G → Lydian
+    expect(text(scaleSwitch())).toBe('skala: C lidyjska');
+    cells = new Set(triadDots(container).map(cell));
+    expect(overlayMap(container)).toEqual(expectedOverlay(0, [0, 2, 4, 6, 7, 9, 11], cells));
   });
 });

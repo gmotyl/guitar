@@ -7,12 +7,15 @@ import { chordLabel, parseProgression, toNumber, transposeNames, type ParseResul
 import { SONG_PRESETS } from '../lib/music/songPresets';
 import {
   STRING_SETS,
+  chordPentatonic,
+  chordScale,
   rungOrder,
   triadName,
   triadPath,
   triads,
   type PathChord,
   type RungTriad,
+  type ScaleNote,
   type StringSet,
   type StringSetId,
   type Triad,
@@ -62,8 +65,19 @@ export interface ChangesState {
   start: number;
   /** Song preset id in the select, null for a typed progression. */
   preset: string | null;
+  /** Soloing overlay of the current chord (the two switches are exclusive). */
+  overlay: Overlay;
 }
-export const DEFAULT_CHANGES: ChangesState = { src: 'G B C Cm', key: 7, set: 'GBe', idx: 0, start: 0, preset: 'creep' };
+export type Overlay = 'none' | 'penta' | 'scale';
+export const DEFAULT_CHANGES: ChangesState = {
+  src: 'G B C Cm',
+  key: 7,
+  set: 'GBe',
+  idx: 0,
+  start: 0,
+  preset: 'creep',
+  overlay: 'none',
+};
 
 type ValidProgression = Extract<ParseResult, { ok: true }>;
 /** Order colour of the i-th chord of a progression (`--k0`…`--k6`, cycling). */
@@ -72,6 +86,12 @@ const orderColor = (i: number) => `var(--k${i % 7})`;
 const OPEN_PITCH = [24, 19, 15, 10, 5, 0];
 const pitchesOf = (t: Triad) => t.set.strings.map((s, i) => OPEN_PITCH[s] + t.frets[i]);
 const cellsOf = (t: Triad) => t.set.strings.map((string, i) => ({ string, fret: t.frets[i] }));
+/** Overlay dot look, as in the mockup: very faint small dots, the root a bit stronger in the chord colour. */
+const OVERLAY_GROUP = 'overlay';
+const OVERLAY_OP = 0.22;
+const OVERLAY_R = 7.5;
+const OVERLAY_ROOT_OP = 0.35;
+const OVERLAY_ROOT_R = 9;
 const sameTriad = (a: Triad, b: Triad) => a.set.id === b.set.id && a.frets.every((f, i) => f === b.frets[i]);
 const keyName = (key: PitchClass) => chordLabel({ root: key, quality: 'major' }, key);
 const setById = (id: StringSetId) => STRING_SETS.find((s) => s.id === id)!;
@@ -226,7 +246,34 @@ export function TriadsExplorer({ t }: TriadsExplorerProps) {
       });
     }
     const curColor = orderColor(idx);
+    const curChord = prog.chords[idx];
+    const scale = chordScale(curChord, prog.key);
+    const overlayNotes: ScaleNote[] =
+      ch.overlay === 'penta' ? chordPentatonic(curChord) : ch.overlay === 'scale' ? scale.notes : [];
+    // The overlay on the whole neck, under the Triads: cells a Triad of the path sits on are left to the Triad.
+    const triadCell = (string: number, fret: number) =>
+      onCurrent({ string, fret }) || dashed.has(`${string}:${fret}`);
+    const overlay: FretDot[] = [];
+    TUNING.forEach((s, string) => {
+      for (let fret = 0; fret <= MAX_FRET; fret++) {
+        const note = overlayNotes.find((x) => x.pc === mod12(s.pc + fret));
+        if (!note || triadCell(string, fret)) continue;
+        const root = note.label === 'R';
+        overlay.push({
+          string,
+          fret,
+          label: note.label,
+          group: OVERLAY_GROUP,
+          ...(root
+            ? { color: curColor, variant: 'filled' as const, opacity: OVERLAY_ROOT_OP, radius: OVERLAY_ROOT_R }
+            : { color: 'var(--muted)', variant: 'outline' as const, opacity: OVERLAY_OP, radius: OVERLAY_R }),
+        });
+      }
+    });
+    const rootName = chordLabel({ root: curChord.root, quality: 'major' }, prog.key);
+    const toggleOverlay = (o: Exclude<Overlay, 'none'>) => patchCh({ overlay: ch.overlay === o ? 'none' : o });
     const dots: FretDot[] = [
+      ...overlay,
       ...dashed.values(),
       ...curCells.map((c, k) => ({ ...c, label: cur.roles[k], color: curColor, variant: 'filled' as const, ring: cur.roles[k] === 'R' })),
     ];
@@ -279,6 +326,16 @@ export function TriadsExplorer({ t }: TriadsExplorerProps) {
             t.setsLabel,
             STRING_SETS.map((s) => chip(s.label, ch.set === s.id, () => patchCh({ set: s.id, start: 0 }))),
           )}
+          {chipRow(t.neckLabel, [
+            chip(
+              format(t2.penta, { chord: chordLabel(curChord, prog.key), kind: t2.pentaKind[curChord.quality] }),
+              ch.overlay === 'penta',
+              () => toggleOverlay('penta'),
+            ),
+            chip(format(t2.scale, { root: rootName, mode: t2.scaleModes[scale.mode] }), ch.overlay === 'scale', () =>
+              toggleOverlay('scale'),
+            ),
+          ])}
         </div>
 
         <div class="prog" role="group" aria-label={t2.progAria}>

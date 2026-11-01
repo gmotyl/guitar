@@ -17,6 +17,10 @@ export interface FretDot {
   ring?: boolean;
   /** Dims this dot alone, independently of `dimmedGroups`. */
   dimmed?: boolean;
+  /** Smaller dot (a soloing overlay): its radius; an outline dot then labels in its own colour. */
+  radius?: number;
+  /** Explicit dot opacity (a soloing overlay); wins over `dimmed` and `dimmedGroups`. */
+  opacity?: number;
 }
 export interface FretBand {
   from: number;
@@ -463,7 +467,7 @@ export function Fretboard({
               data-group={d.group}
               data-string={d.string}
               data-fret={d.fret}
-              opacity={d.dimmed ? DOT_DIM : opacityFor(d.group, dimmedGroups)}
+              opacity={d.opacity ?? (d.dimmed ? DOT_DIM : opacityFor(d.group, dimmedGroups))}
               pointer-events={passThrough}
             >
               {split ? (
@@ -489,10 +493,10 @@ export function Fretboard({
                 <circle
                   cx={x}
                   cy={y}
-                  r={DOT_R}
+                  r={d.radius ?? DOT_R}
                   fill={d.variant === 'filled' && d.colors?.length === 1 ? d.colors[0] : fill}
                   stroke={d.color}
-                  stroke-width={2.5}
+                  stroke-width={d.radius != null ? 1.4 : 2.5}
                   stroke-dasharray={d.variant === 'dashed' ? '3 2' : undefined}
                 />
               )}
@@ -503,9 +507,17 @@ export function Fretboard({
                 x={x}
                 y={y + 4}
                 text-anchor="middle"
-                font-size={11}
+                font-size={d.radius != null ? 9.5 : 11}
                 font-weight={700}
-                fill={d.variant === 'outline' ? 'var(--fg)' : d.variant === 'dashed' ? d.color : 'var(--on)'}
+                fill={
+                  d.variant === 'outline'
+                    ? d.radius != null
+                      ? d.color
+                      : 'var(--fg)'
+                    : d.variant === 'dashed'
+                      ? d.color
+                      : 'var(--on)'
+                }
               >
                 {d.label}
               </text>
