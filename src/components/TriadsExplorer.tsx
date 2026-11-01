@@ -6,6 +6,7 @@ import { TUNING, type PitchClass } from '../lib/music/notes';
 import { chordLabel, parseProgression, toNumber, transposeNames, type ParseResult } from '../lib/music/progression';
 import { SONG_PRESETS } from '../lib/music/songPresets';
 import { deleteProgression, loadSaved, saveProgression, type SavedProgression } from '../lib/savedProgressions';
+import { readTriadsQuery, writeTriadsQuery } from '../lib/triadsUrl';
 import {
   STRING_SETS,
   chordPentatonic,
@@ -122,10 +123,53 @@ const SONGS_ID = 'triads-songs';
 /** Select value prefix of an own progression (song ids never contain ':'). */
 const OWN = 'own:';
 
+/**
+ * Page state from a shared link. The codec leaves `i` and `start` unbounded, so they are fitted to the
+ * chosen chord / progression here; typed chord names take their detected key unless `key` is given.
+ */
+function stateFromQuery(search: string): { mode: Mode; inv: InversionsState; ch: ChangesState } {
+  const q = readTriadsQuery(search);
+  const qi = q.inversions;
+  const total = rungOrder(qi.root, qi.quality, chosenSets(qi.set)).length;
+  const inv: InversionsState = { ...DEFAULT_INVERSIONS, ...qi, index: Math.min(qi.index, total - 1) };
+
+  const qc = q.changes;
+  const r = parseProgression(qc.src, qc.key);
+  const key = r.ok && r.kind === 'names' && !new URLSearchParams(search).has('key') ? r.key : qc.key;
+  let start = 0;
+  if (r.ok) {
+    const first = r.chords[0];
+    start = qc.start % Math.max(1, triads(first.root, first.quality, setById(qc.set)).length);
+  }
+  const preset = SONG_PRESETS.find((p) => p.src === qc.src)?.id ?? null;
+  const ch: ChangesState = { ...DEFAULT_CHANGES, src: qc.src, key, set: qc.set, start, overlay: qc.overlay, preset };
+  return { mode: q.mode, inv, ch };
+}
+
 export function TriadsExplorer({ t }: TriadsExplorerProps) {
   const [mode, setMode] = useState<Mode>('inversions');
   const [inv, setInv] = useState<InversionsState>(DEFAULT_INVERSIONS);
   const [ch, setCh] = useState<ChangesState>(DEFAULT_CHANGES);
+  // State in the URL: read after mount (the server renders the defaults, so hydration matches), then
+  // every change replaces the query — no new history entries.
+  const [urlRead, setUrlRead] = useState(false);
+  useEffect(() => {
+    const s = stateFromQuery(location.search);
+    setMode(s.mode);
+    setInv(s.inv);
+    setCh(s.ch);
+    setUrlRead(true);
+  }, []);
+  useEffect(() => {
+    if (!urlRead) return;
+    const query = writeTriadsQuery({
+      mode,
+      inversions: { root: inv.root, quality: inv.quality, set: inv.set, index: inv.index },
+      changes: { src: ch.src, key: ch.key, set: ch.set, start: ch.start, overlay: ch.overlay },
+    });
+    if (query === location.search) return;
+    history.replaceState(history.state, '', location.pathname + query + location.hash);
+  }, [urlRead, mode, inv, ch]);
   // Own progressions: read after mount, so the server render and hydration match.
   const [saved, setSaved] = useState<SavedProgression[]>([]);
   useEffect(() => setSaved(loadSaved()), []);

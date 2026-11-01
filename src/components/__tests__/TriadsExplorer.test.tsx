@@ -43,6 +43,9 @@ const cell = (d: Element) => `${d.getAttribute('data-string')}:${d.getAttribute(
 
 const GRID = 'Wszystkie triady akordu';
 
+// The explorer writes its state into the URL; every test starts on a bare path.
+afterEach(() => history.replaceState(null, '', '/'));
+
 describe('TriadsExplorer — Inversions mode', () => {
   afterEach(cleanup);
 
@@ -849,5 +852,86 @@ describe('TriadsExplorer — own progressions', () => {
     expect(screen.getByLabelText<HTMLSelectElement>('Songs').querySelector('optgroup[label="My progressions"]')).not.toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
     expect(stored()).toEqual([]);
+  });
+});
+
+describe('TriadsExplorer — state in the URL', () => {
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+  const visit = (search: string) => history.replaceState(null, '', `/triads${search}`);
+
+  it('a shared Chord changes link restores the progression', () => {
+    visit('?mode=changes&prog=C+G+Am+F&set=DGB');
+    const { container } = renderExplorer();
+    expect(pressed('Tryb')).toEqual(['Zmiany akordów']);
+    expect(field().value).toBe('C G Am F');
+    // The key of typed names is detected, not the default G.
+    expect(pressed('Tonacja')).toEqual(['C']);
+    expect(text(line(container))).toBe('Numbery: 1 5 6- 4 · tonacja rozpoznana: C-dur');
+    expect(pressed('Struny')).toEqual(['D-G-B']);
+    expect(tileNames()).toBe('C G Am F');
+    // A song's progression selects that song.
+    expect(songSelect().value).toBe('noWomanNoCry');
+    cleanup();
+    // Numbers take the key parameter; start wraps to the first chord's Triads.
+    visit('?mode=changes&prog=1+4+5&key=2&start=7&overlay=penta');
+    const r = renderExplorer();
+    expect(field().value).toBe('1 4 5');
+    expect(pressed('Tonacja')).toEqual(['D']);
+    expect(tileNames()).toBe('D G A');
+    expect(isOn(pentaSwitch())).toBe(true);
+    expect(text(line(r.container))).toContain('D-dur');
+    expect(nowName(r.container)).toMatch(/^1\./);
+    expect(songSelect().value).toBe('');
+  });
+
+  it('an Inversions link restores chord, set and index', () => {
+    visit('?root=9&q=min&set=GBe&i=2');
+    const { container } = renderExplorer();
+    expect(pressed('Tryb')).toEqual(['Przewroty']);
+    expect(pressed('Akord')).toEqual(['A']);
+    expect(pressed('Jakość')).toEqual(['moll']);
+    expect(pressed('Struny')).toEqual(['G-B-e']);
+    expect(count(container)).toBe('3 / 4');
+    expect(nowName(container)).toMatch(/^Am/);
+    cleanup();
+    // An index past the end is clamped; invalid values fall back to their defaults without an error.
+    visit('?root=99&set=XYZ&i=40');
+    const r = renderExplorer();
+    expect(pressed('Akord')).toEqual(['C']);
+    expect(pressed('Struny')).toEqual(['wszystkie grupy']);
+    expect(count(r.container)).toBe('16 / 16');
+    next();
+    expect(count(r.container)).toBe('1 / 16');
+  });
+
+  it('state changes replace the URL query', () => {
+    visit('');
+    const replace = vi.spyOn(history, 'replaceState');
+    const push = vi.spyOn(history, 'pushState');
+    const { container } = renderExplorer();
+    // Nothing changed yet: still no query.
+    expect(location.search).toBe('');
+    click('Akord', 'A');
+    click('Jakość', 'moll');
+    click('Struny', 'G-B-e');
+    next();
+    expect(replace).toHaveBeenCalled();
+    expect(location.search).toBe('?root=9&q=min&set=GBe&i=1');
+    expect(location.pathname).toBe('/triads');
+    expect(count(container)).toBe('2 / 4');
+    click('Tryb', 'Zmiany akordów');
+    typeProg('C G Am F');
+    expect(location.search).toBe('?mode=changes&root=9&q=min&i=1&prog=C+G+Am+F&key=0');
+    // Back to every default: no query at all.
+    typeProg('G B C Cm');
+    click('Tryb', 'Przewroty');
+    click('Akord', 'C');
+    click('Jakość', 'dur');
+    click('Struny', 'wszystkie grupy');
+    expect(location.search).toBe('');
+    expect(push).not.toHaveBeenCalled();
   });
 });
