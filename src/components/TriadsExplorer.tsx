@@ -5,6 +5,7 @@ import { role } from '../lib/music/caged';
 import { TUNING, noteName, type PitchClass } from '../lib/music/notes';
 import { chordLabel, parseProgression, toNumber, transposeNames, type ParseResult } from '../lib/music/progression';
 import { SONG_PRESETS } from '../lib/music/songPresets';
+import { deleteProgression, loadSaved, saveProgression, type SavedProgression } from '../lib/savedProgressions';
 import {
   STRING_SETS,
   chordPentatonic,
@@ -63,7 +64,7 @@ export interface ChangesState {
   idx: number;
   /** Which Triad of the first chord starts the Triad path. */
   start: number;
-  /** Song preset id in the select, null for a typed progression. */
+  /** Song preset id (or `own:<name>` for an own progression) in the select, null for a typed progression. */
   preset: string | null;
   /** Soloing overlay of the current chord (the two switches are exclusive). */
   overlay: Overlay;
@@ -115,11 +116,23 @@ const chosenSets = (set: InversionsState['set']): readonly StringSet[] =>
 const KEY_SHIELD = '.chips, input, textarea, select';
 const FIELD_ID = 'triads-progression';
 const SONGS_ID = 'triads-songs';
+/** Select value prefix of an own progression (song ids never contain ':'). */
+const OWN = 'own:';
 
 export function TriadsExplorer({ t }: TriadsExplorerProps) {
   const [mode, setMode] = useState<Mode>('inversions');
   const [inv, setInv] = useState<InversionsState>(DEFAULT_INVERSIONS);
   const [ch, setCh] = useState<ChangesState>(DEFAULT_CHANGES);
+  // Own progressions: read after mount, so the server render and hydration match.
+  const [saved, setSaved] = useState<SavedProgression[]>([]);
+  useEffect(() => setSaved(loadSaved()), []);
+  /** The inline "save as" name field: null while closed. */
+  const [saveName, setSaveName] = useState<string | null>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
+  const saveOpen = saveName !== null;
+  useEffect(() => {
+    if (saveOpen) nameRef.current?.focus();
+  }, [saveOpen]);
   // The board keeps the last valid progression while the field holds invalid text.
   const lastValid = useRef<ValidProgression>(parseProgression(DEFAULT_CHANGES.src, DEFAULT_CHANGES.key) as ValidProgression);
   const parsed = parseProgression(ch.src, ch.key);
@@ -206,10 +219,28 @@ export function TriadsExplorer({ t }: TriadsExplorerProps) {
       patchCh({ key, start: 0, ...(moved != null ? { src: moved } : {}) });
     };
     const pickSong = (id: string) => {
+      if (id.startsWith(OWN)) {
+        const own = saved.find((p) => p.name === id.slice(OWN.length));
+        if (own) patchCh({ src: own.src, key: own.key, preset: id, idx: 0, start: 0 });
+        return;
+      }
       const song = SONG_PRESETS.find((p) => p.id === id);
       if (!song) return;
       const r = parseProgression(song.src, ch.key);
       patchCh({ src: song.src, preset: id, idx: 0, start: 0, ...(r.ok ? { key: r.key } : {}) });
+    };
+    const saveOwn = () => {
+      const name = saveName?.trim();
+      if (!name) return;
+      setSaved(saveProgression({ name, src: ch.src, key: ch.key }));
+      setSaveName(null);
+      patchCh({ preset: OWN + name });
+    };
+    const ownSelected = ch.preset?.startsWith(OWN) ? ch.preset.slice(OWN.length) : null;
+    const removeOwn = () => {
+      if (ownSelected == null) return;
+      setSaved(deleteProgression(ownSelected));
+      patchCh({ preset: null });
     };
     const otherStart = () => {
       const first: PathChord = prog.chords[0];
@@ -316,7 +347,51 @@ export function TriadsExplorer({ t }: TriadsExplorerProps) {
                   <option value={p.id}>{p.title}</option>
                 ))}
               </optgroup>
+              {saved.length > 0 && (
+                <optgroup label={t2.ownGroup}>
+                  {saved.map((p) => (
+                    <option value={OWN + p.name}>{p.name}</option>
+                  ))}
+                </optgroup>
+              )}
             </select>
+            {ownSelected != null && (
+              <button type="button" class="act" onClick={removeOwn}>
+                {t2.remove}
+              </button>
+            )}
+            {saveName == null ? (
+              <button type="button" class="act" disabled={!parsed.ok} onClick={() => setSaveName('')}>
+                {t2.saveAs}
+              </button>
+            ) : (
+              <form
+                class="save"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  saveOwn();
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') setSaveName(null);
+                }}
+              >
+                <input
+                  type="text"
+                  autocomplete="off"
+                  aria-label={t2.saveName}
+                  placeholder={t2.saveName}
+                  value={saveName}
+                  onInput={(e) => setSaveName((e.currentTarget as HTMLInputElement).value)}
+                  ref={nameRef}
+                />
+                <button type="submit" class="act" disabled={saveName.trim() === ''}>
+                  {t2.save}
+                </button>
+                <button type="button" class="act" onClick={() => setSaveName(null)}>
+                  {t2.cancel}
+                </button>
+              </form>
+            )}
           </div>
           {chipRow(
             t2.keyLabel,

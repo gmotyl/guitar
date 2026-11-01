@@ -1,10 +1,11 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/preact';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { TriadsExplorer } from '../TriadsExplorer';
 import { t } from '../../i18n';
 import { STRING_SETS, triads } from '../../lib/music/triads';
+import { SAVED_KEY } from '../../lib/savedProgressions';
 
 const renderExplorer = (lang: 'pl' | 'en' = 'pl') => render(<TriadsExplorer lang={lang} t={t(lang).triads} />);
 const text = (el: Element | null | undefined) => el?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
@@ -703,5 +704,147 @@ describe('TriadsExplorer — soloing overlays', () => {
     expect(text(scaleSwitch())).toBe('skala: C lidyjska');
     cells = new Set(triadDots(container).map(cell));
     expect(overlayMap(container)).toEqual(expectedOverlay(0, [0, 2, 4, 6, 7, 9, 11], cells));
+  });
+});
+
+// Own progressions helpers.
+const nameField = () => screen.queryByLabelText<HTMLInputElement>('Nazwa progresji');
+const button = (name: string) => screen.queryByRole('button', { name });
+const ownGroup = () => songSelect().querySelector('optgroup[label="Moje progresje"]');
+const ownNames = () => Array.from(ownGroup()?.querySelectorAll('option') ?? []).map(text);
+const stored = () => JSON.parse(localStorage.getItem(SAVED_KEY) ?? 'null');
+const saveAs = (name: string) => {
+  fireEvent.click(button('Zapisz jako…')!);
+  fireEvent.input(nameField()!, { target: { value: name } });
+  fireEvent.click(button('Zapisz')!);
+};
+
+describe('TriadsExplorer — own progressions', () => {
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    localStorage.clear();
+  });
+
+  it('Zapisz jako opens an inline name field', () => {
+    const prompt = vi.fn(() => 'Z promptu');
+    vi.stubGlobal('prompt', prompt);
+    expect(window.prompt).toBe(prompt);
+    openChanges();
+    expect(nameField()).toBeNull();
+    expect(button('Zapisz')).toBeNull();
+    fireEvent.click(button('Zapisz jako…')!);
+    // An inline field with save / cancel next to the select, no browser prompt.
+    expect(prompt).not.toHaveBeenCalled();
+    const input = nameField()!;
+    expect(input).not.toBeNull();
+    expect(input.closest('.controls .row')!.contains(songSelect())).toBe(true);
+    expect(button('Zapisz')).not.toBeNull();
+    expect(button('Anuluj')).not.toBeNull();
+    // Save is off until a name is typed.
+    expect(button('Zapisz')!.hasAttribute('disabled')).toBe(true);
+    fireEvent.input(input, { target: { value: 'Moja' } });
+    expect(button('Zapisz')!.hasAttribute('disabled')).toBe(false);
+    fireEvent.click(button('Anuluj')!);
+    expect(nameField()).toBeNull();
+    expect(stored()).toBeNull();
+    cleanup();
+    openChanges('en');
+    fireEvent.click(screen.getByRole('button', { name: 'Save as…' }));
+    expect(screen.getByLabelText('Progression name')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Save' })).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Cancel' })).not.toBeNull();
+    expect(prompt).not.toHaveBeenCalled();
+  });
+
+  it('a saved progression is listed under Moje progresje and can be picked', () => {
+    const setItem = vi.spyOn(Storage.prototype, 'setItem');
+    openChanges();
+    expect(ownGroup()).toBeNull();
+    typeProg('Em C G D');
+    expect(pressed('Tonacja')).toEqual(['G']);
+    saveAs('Moja');
+    expect(setItem).toHaveBeenCalledWith(SAVED_KEY, expect.any(String));
+    expect(stored()).toEqual([{ name: 'Moja', src: 'Em C G D', key: 7 }]);
+    expect(nameField()).toBeNull();
+    expect(ownNames()).toEqual(['Moja']);
+    expect(songSelect().value).toBe('own:Moja');
+    // Same name: replaced, not duplicated.
+    typeProg('Em C G');
+    saveAs('Moja');
+    expect(stored()).toEqual([{ name: 'Moja', src: 'Em C G', key: 7 }]);
+    expect(ownNames()).toEqual(['Moja']);
+    // Picking it after a song fills the field and key.
+    fireEvent.change(songSelect(), { target: { value: 'time' } });
+    expect(pressed('Tonacja')).toEqual(['A']);
+    fireEvent.change(songSelect(), { target: { value: 'own:Moja' } });
+    expect(field().value).toBe('Em C G');
+    expect(pressed('Tonacja')).toEqual(['G']);
+    expect(tileNames()).toBe('Em C G');
+    expect(songSelect().value).toBe('own:Moja');
+    // A reload lists the saved entries.
+    cleanup();
+    const getItem = vi.spyOn(Storage.prototype, 'getItem');
+    openChanges();
+    expect(getItem).toHaveBeenCalledWith(SAVED_KEY);
+    expect(ownNames()).toEqual(['Moja']);
+  });
+
+  it('a throwing or corrupt storage leaves the list empty and the page working', () => {
+    const getItem = vi.fn(() => {
+      throw new Error('denied');
+    });
+    const setItem = vi.fn(() => {
+      throw new Error('denied');
+    });
+    vi.stubGlobal('localStorage', { getItem, setItem, removeItem: vi.fn(), clear: vi.fn(), key: vi.fn(), length: 0 });
+    const { container } = openChanges();
+    expect(getItem).toHaveBeenCalled();
+    expect(ownGroup()).toBeNull();
+    next();
+    expect(currentTile()).toBe(1);
+    saveAs('Moja');
+    expect(setItem).toHaveBeenCalled();
+    expect(text(line(container))).toBe('Numbery: 1 3 4 4- · tonacja rozpoznana: G-dur');
+    vi.unstubAllGlobals();
+    cleanup();
+    localStorage.setItem(SAVED_KEY, '{not json');
+    openChanges();
+    expect(ownGroup()).toBeNull();
+    expect(tiles()).toHaveLength(4);
+  });
+
+  it('Usuń removes the selected own progression', () => {
+    localStorage.setItem(
+      SAVED_KEY,
+      JSON.stringify([
+        { name: 'Moja', src: 'Em C G D', key: 7 },
+        { name: 'Druga', src: 'C G Am F', key: 0 },
+      ]),
+    );
+    openChanges();
+    expect(ownNames()).toEqual(['Moja', 'Druga']);
+    // A song is selected: no Usuń.
+    expect(button('Usuń')).toBeNull();
+    fireEvent.change(songSelect(), { target: { value: 'own:Moja' } });
+    expect(field().value).toBe('Em C G D');
+    const del = button('Usuń')!;
+    expect(del).not.toBeNull();
+    expect(del.closest('.controls .row')!.contains(songSelect())).toBe(true);
+    fireEvent.click(del);
+    expect(ownNames()).toEqual(['Druga']);
+    expect(stored()).toEqual([{ name: 'Druga', src: 'C G Am F', key: 0 }]);
+    expect(button('Usuń')).toBeNull();
+    expect(songSelect().value).toBe('');
+    // The field keeps the text; the board still works.
+    expect(field().value).toBe('Em C G D');
+    expect(tileNames()).toBe('Em C G D');
+    cleanup();
+    openChanges('en');
+    fireEvent.change(screen.getByLabelText<HTMLSelectElement>('Songs'), { target: { value: 'own:Druga' } });
+    expect(screen.getByLabelText<HTMLSelectElement>('Songs').querySelector('optgroup[label="My progressions"]')).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(stored()).toEqual([]);
   });
 });

@@ -42,6 +42,14 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--focus, var(
 .controls .row select { font: inherit; font-size: .88rem; padding: 3px 8px; border-radius: 8px; max-width: 100%;
   border: 1px solid var(--line); background: var(--card); color: var(--fg); }
 
+/* Own progressions: "Zapisz jako…" opens an inline name field with save / cancel; "Usuń" for an own one. */
+.controls .row .act { font: inherit; font-size: .85rem; padding: 3px 10px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--card); color: var(--fg); }
+.controls .row .act:disabled { opacity: .5; cursor: default; }
+.controls .row .save { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 0; }
+.controls .row .save input { font: inherit; font-size: .88rem; padding: 3px 8px; border-radius: 8px; width: 12em; max-width: 100%;
+  border: 1px solid var(--line); background: var(--card); color: var(--fg); }
+
 /* Progression tiles: dashed border in the order colour, the current tile filled. */
 .prog { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 4px; }
 .prog button { font: inherit; display: grid; justify-items: center; min-width: 60px; padding: 4px 10px; border-radius: 10px;
