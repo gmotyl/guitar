@@ -589,3 +589,71 @@ describe('Fretboard click areas', () => {
     expect(container.querySelector('[style*="cursor"]')).toBeNull();
   });
 });
+
+describe('Fretboard outline pass-through and open-string column', () => {
+  const am = boxes({ root: 9, quality: 'minor' }, 15);
+  const outlines = am.map((b) => ({ group: `box-${b.n}`, color: 'var(--c)', cells: b.cells }));
+  const boxDots: FretDot[] = am.flatMap((b) =>
+    b.cells.map((c) => ({ ...c, label: '', color: 'var(--c)', variant: 'outline' as const, group: `box-${b.n}` })),
+  );
+
+  it('outline polygons let the pointer through only when onFretClick is given', () => {
+    for (const orientation of ['horizontal', 'vertical'] as const) {
+      const clickable = render(
+        <Fretboard orientation={orientation} dots={boxDots} outlines={outlines} ariaLabel="b" onFretClick={() => {}} />,
+      );
+      const polys = all(clickable.container, 'outline');
+      expect(polys.length).toBeGreaterThan(0);
+      for (const p of polys) expect(p.getAttribute('pointer-events')).toBe('none');
+      clickable.unmount();
+
+      const plain = render(<Fretboard orientation={orientation} dots={boxDots} outlines={outlines} ariaLabel="b" />);
+      const plainPolys = all(plain.container, 'outline');
+      expect(plainPolys.length).toBeGreaterThan(0);
+      for (const p of plainPolys) expect(p.hasAttribute('pointer-events')).toBe(false);
+      plain.unmount();
+    }
+  });
+
+  it('the fret-0 column spans from the board edge to the nut around the open-string dot', () => {
+    const open: FretDot[] = [{ string: 3, fret: 0, label: 'D', color: 'var(--c)', variant: 'filled', group: 'C' }];
+    for (const orientation of ['horizontal', 'vertical'] as const) {
+      const h = orientation === 'horizontal';
+      const { container, unmount } = render(
+        <Fretboard orientation={orientation} dots={open} ariaLabel="b" onFretClick={() => {}} />,
+      );
+      const col = container.querySelector('[data-role="fret-column"][data-fret="0"]')!;
+      const [lo, len] = h ? [num(col, 'x'), num(col, 'width')] : [num(col, 'y'), num(col, 'height')];
+      const circle = all(container, 'dot')[0].querySelector('circle')!;
+      const centre = num(circle, h ? 'cx' : 'cy');
+      const nut = all(container, 'nut')[0];
+      const nutAt = num(nut, h ? 'x1' : 'y1');
+      // Ends at the nut, starts before the open dot, and the dot (cellAt(0)) sits in its middle.
+      expect(lo + len).toBe(nutAt);
+      expect(lo).toBeLessThan(centre);
+      expect(centre).toBeLessThan(nutAt);
+      expect(lo + len / 2).toBeCloseTo(centre);
+      // Spans every string across the board.
+      const [aLo, aLen] = h ? [num(col, 'y'), num(col, 'height')] : [num(col, 'x'), num(col, 'width')];
+      for (const s of all(container, 'string')) {
+        const across = num(s, h ? 'y1' : 'x1');
+        expect(across).toBeGreaterThan(aLo);
+        expect(across).toBeLessThan(aLo + aLen);
+      }
+      unmount();
+    }
+  });
+
+  it('pentatonic-style board with outlines renders stably', () => {
+    const bands: FretBand[] = am
+      .filter((b) => !b.copy)
+      .map((b) => ({ from: b.from, to: b.to, color: 'var(--c)', label: String(b.n), group: `box-${b.n}` }));
+    for (const orientation of ['horizontal', 'vertical'] as const) {
+      const { container, unmount } = render(
+        <Fretboard orientation={orientation} dots={boxDots} bands={bands} outlines={outlines} ariaLabel="A minor pentatonic" />,
+      );
+      expect(container.innerHTML).toMatchSnapshot(`pentatonic ${orientation}`);
+      unmount();
+    }
+  });
+});
