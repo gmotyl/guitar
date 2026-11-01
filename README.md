@@ -10,10 +10,12 @@ The triads page has two modes. **Inversions** shows one chord's Triads in Rung o
 String sets of one Rung, low to high, then moves up the neck), on all String sets or one. **Chord
 changes** plays a progression as a Triad path: from a start Triad of the first chord, the nearest
 Triad of each next chord on the same String set. The progression field takes Numbers or chord names
-and shows the other form live; typed names pick their key by detection, key chips move them. Pick one
-of 13 song presets, or save your own progressions by name (kept in localStorage). For soloing, overlay
-the Chord pentatonic or the Chord scale of the current chord on the whole neck. The page state lives
-in the URL, so a link reopens the same view.
+and shows the other form live; typed names pick their key by detection, and the key chips move them
+(for Numbers, the key chips set the key). Pick one of 13 song presets, or save your own progressions
+by name (kept in localStorage). In Chord changes mode only, overlay the Chord pentatonic or the Chord
+scale of the current chord on the whole neck for soloing. The page state lives in the URL: a shared
+link restores the mode with its chord, String set and Inversion index (Inversions), or its progression,
+key, String set, start Triad and overlay (Chord changes), and opens on the first chord.
 
 Astro (static output) with Preact islands, served by Cloudflare Workers static assets.
 
