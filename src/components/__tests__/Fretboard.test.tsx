@@ -263,6 +263,26 @@ describe('Fretboard overlays', () => {
     expect(all(container, 'outline').map((o) => o.getAttribute('opacity'))).toEqual(['0.12', '0.12', '1']);
   });
 
+  it('draws a dashed outline without fill', () => {
+    const { container } = render(
+      <Fretboard
+        orientation="horizontal"
+        dots={[]}
+        outlines={[
+          { group: 'E', color: 'var(--e)', cells: box, dashed: true },
+          { group: 'D', color: 'var(--d)', cells: box },
+        ]}
+        ariaLabel="b"
+      />,
+    );
+    const [dashed, solid] = all(container, 'outline');
+    expect(dashed.getAttribute('stroke-dasharray')).toBeTruthy();
+    expect(dashed.getAttribute('fill')).toBe('none');
+    expect(dashed.getAttribute('stroke')).toBe('var(--e)');
+    expect(solid.hasAttribute('stroke-dasharray')).toBe(false);
+    expect(solid.getAttribute('fill')).toBe('var(--d)');
+  });
+
   it('renders a single-colour dot as a plain filled circle', () => {
     const { container } = render(
       <Fretboard

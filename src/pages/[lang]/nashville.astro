@@ -1,0 +1,18 @@
+---
+import Site from '../../layouts/Site.astro';
+import { NashvilleExplorer } from '../../components/NashvilleExplorer';
+import { LANGS, t, type Lang } from '../../i18n';
+import '../../components/nashville.css';
+
+export function getStaticPaths() {
+  return LANGS.map((lang) => ({ params: { lang } }));
+}
+
+const lang = Astro.params.lang as Lang;
+const dict = t(lang);
+---
+<Site lang={lang} title={dict.nashville.title} slug="nashville">
+  <h1>{dict.nashville.title}</h1>
+  <p class="sub">{dict.nashville.subtitle}</p>
+  <NashvilleExplorer client:load lang={lang} t={dict.nashville} />
+</Site>

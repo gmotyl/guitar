@@ -1,8 +1,9 @@
 # guitar
 
 Source of [guitar.motyl.dev](https://guitar.motyl.dev): guitar learning pages in Polish and English.
-Pages: a CAGED system explorer (major and minor) and the pentatonic scale with the key chords
-overlaid. The screen stays on while a page is open (switch in the menu).
+Pages: a CAGED system explorer (major and minor, `/caged`), the pentatonic scale with the key
+chords overlaid (`/pentatonic`), and the Nashville Number System with a key's chords as Numbers
+(`/nashville`). The screen stays on while a page is open (switch in the menu).
 
 Astro (static output) with Preact islands, served by Cloudflare Workers static assets.
 

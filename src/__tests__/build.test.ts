@@ -3,6 +3,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { t } from '../i18n';
 import { PAGES } from '../pages';
 
 const DIST = join(process.cwd(), 'dist');
@@ -246,5 +247,79 @@ describe('pentatonic page build output', () => {
     const noscript = stub.match(/<noscript>([\s\S]*?)<\/noscript>/)?.[1] ?? '';
     expect(noscript).toContain('href="/pl/pentatonic"');
     expect(noscript).toContain('href="/en/pentatonic"');
+  });
+});
+
+describe('nashville page build output', () => {
+  const text = (el: Element | null | undefined) => el?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+
+  /** Every string leaf of a nested dictionary section. */
+  const leaves = (v: unknown): string[] =>
+    typeof v === 'string' ? [v] : Object.values(v as Record<string, unknown>).flatMap(leaves);
+
+  it('builds nashville in both languages with hreflang', () => {
+    for (const lang of ['pl', 'en'] as const) {
+      const file = `${lang}/nashville/index.html`;
+      expect(existsSync(join(DIST, file)), `dist/${file}`).toBe(true);
+      const d = doc(file);
+      expect(d.documentElement.getAttribute('lang')).toBe(lang);
+      const alt = (h: string) => d.querySelector(`link[rel="alternate"][hreflang="${h}"]`)?.getAttribute('href');
+      expect(alt('pl')).toBe(`${SITE}/pl/nashville`);
+      expect(alt('en')).toBe(`${SITE}/en/nashville`);
+      expect(alt('x-default')).toBe(`${SITE}/nashville`);
+      const dict = t(lang).nashville;
+      expect(text(d.querySelector('main h1'))).toBe(dict.title);
+      expect(text(d.querySelector('main .sub'))).toBe(dict.subtitle);
+      // Menu and home both come from the registry.
+      const menu = Array.from(d.querySelectorAll('header.site-header #site-menu a'));
+      const link = menu.find((a) => a.getAttribute('href') === `/${lang}/nashville`);
+      expect(text(link)).toContain(PAGES[2].title[lang]);
+      expect(doc(`${lang}/index.html`).querySelector(`main .tiles a[href="/${lang}/nashville"]`)).not.toBeNull();
+
+      // Without JS: blues in A, first bar (1 = A) on both boards.
+      d.querySelectorAll('script').forEach((s) => s.remove());
+      const pressed = Array.from(d.querySelectorAll('.controls button[aria-pressed="true"]')).map(text);
+      expect(pressed).toEqual(['A', dict.presets.blues]);
+      expect(text(d.querySelector('.keyline'))).toBe(lang === 'pl' ? 'Tonacja A — 1 = A' : 'Key of A — 1 = A');
+      expect(d.querySelectorAll('.chart .bar')).toHaveLength(12);
+      expect(d.querySelectorAll('.chart button[aria-pressed="true"]')).toHaveLength(1);
+      expect(text(d.querySelector('.chordline'))).toContain('1 = A');
+      expect(d.querySelector('.board--h svg[data-orientation="horizontal"]')).not.toBeNull();
+      expect(d.querySelector('.board--v svg[data-orientation="vertical"]')).not.toBeNull();
+      expect(d.querySelectorAll('.board--h svg [data-role="dot"]').length).toBeGreaterThan(0);
+    }
+  });
+
+  it('nashville has a redirect stub', () => {
+    const stub = read('nashville/index.html');
+    expect(stub).toContain('guitar.lang');
+    expect(stub).toContain('location.replace');
+    const noscript = stub.match(/<noscript>([\s\S]*?)<\/noscript>/)?.[1] ?? '';
+    expect(noscript).toContain('href="/pl/nashville"');
+    expect(noscript).toContain('href="/en/nashville"');
+  });
+
+  it('english nashville page has no Polish copy', () => {
+    const d = doc('en/nashville/index.html');
+    d.querySelectorAll('script').forEach((s) => s.remove());
+    // Visible text plus aria labels, since most of the dictionary lives in labels.
+    const labels = Array.from(d.querySelectorAll('[aria-label]')).map((el) => el.getAttribute('aria-label'));
+    const en = [text(d.body), ...labels].join('\n');
+    const plValues = leaves(t('pl').nashville);
+    const enValues = new Set(leaves(t('en').nashville));
+    // Values shared by both languages (e.g. "Pop 1-5-6-4") are not Polish copy.
+    // Placeholders split each template into its literal fragments; fragments without a word
+    // (e.g. "— 1 =") are shared notation, not copy.
+    const fragments = plValues
+      .filter((v) => !enValues.has(v))
+      .flatMap((v) => v.split(/\{\w+\}/))
+      .map((f) => f.trim())
+      .filter((f) => /\p{L}{3,}/u.test(f));
+    expect(fragments.length).toBeGreaterThan(20);
+    // Whole-word match: "— role" must not hit the English "— roles".
+    const escape = (f: string) => f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    for (const pl of fragments) expect(en, pl).not.toMatch(new RegExp(`(?<!\\p{L})${escape(pl)}(?!\\p{L})`, 'u'));
+    expect(en).not.toMatch(/[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/);
+    expect(text(d.body)).toContain('12-bar blues');
   });
 });
