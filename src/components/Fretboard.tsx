@@ -33,6 +33,8 @@ export interface FretOutline {
   color: string;
   cells: { string: number; fret: number }[];
   dimmed?: boolean;
+  /** Dashed stroke and no fill (a CAGED position window). */
+  dashed?: boolean;
 }
 export interface FretboardProps {
   orientation: 'horizontal' | 'vertical';
@@ -396,10 +398,11 @@ export function Fretboard({
               data-role="outline"
               data-group={o.group}
               points={outlinePoints(g, o.cells)}
-              fill={o.color}
-              fill-opacity={0.07}
+              fill={o.dashed ? 'none' : o.color}
+              fill-opacity={o.dashed ? undefined : 0.07}
               stroke={o.color}
               stroke-width={2.2}
+              stroke-dasharray={o.dashed ? '6 4' : undefined}
               stroke-linejoin="round"
               pointer-events={passThrough}
               opacity={o.dimmed ? DIM : opacityFor(o.group, dimmedGroups)}
