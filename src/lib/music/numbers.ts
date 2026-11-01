@@ -102,3 +102,32 @@ export function chordTones(c: NumberChord, keyRoot: PitchClass): { pc: PitchClas
 export function numberColor(step: Step): string {
   return step === 7 ? 'var(--muted)' : `var(--k${step - 1})`;
 }
+
+export type CagedShape = 'E' | 'D' | 'C' | 'A' | 'G';
+
+/** Fret span of each CAGED shape relative to the key root's fret on the low E string. */
+const SHAPE_OFFSETS: Record<CagedShape, readonly [number, number]> = {
+  E: [-1, 3],
+  D: [1, 5],
+  C: [4, 8],
+  A: [6, 10],
+  G: [8, 12],
+};
+
+const MAX_FRET = 15;
+
+/** The Position window `[from, to]` of a CAGED shape in the key, kept inside frets 0–15. */
+export function positionWindow(keyRoot: PitchClass, shape: CagedShape): [from: number, to: number] {
+  const e = mod12(keyRoot - 4); // root fret on low E (open E = pc 4)
+  let from = e + SHAPE_OFFSETS[shape][0];
+  let to = e + SHAPE_OFFSETS[shape][1];
+  while (to > MAX_FRET && from - 12 >= -1) {
+    from -= 12;
+    to -= 12;
+  }
+  if (from < 0) {
+    from += 12;
+    to += 12;
+  }
+  return [Math.max(0, from), Math.min(MAX_FRET, to)];
+}

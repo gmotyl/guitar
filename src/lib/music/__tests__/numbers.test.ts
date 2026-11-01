@@ -6,6 +6,8 @@ import {
   numberLabel,
   numberName,
   parseChart,
+  positionWindow,
+  type CagedShape,
   type NumberChord,
   type Step,
 } from '../numbers';
@@ -91,5 +93,26 @@ describe('numbers', () => {
       'var(--k5)',
       'var(--muted)',
     ]);
+  });
+
+  it('places the five windows for spot keys', () => {
+    expect(positionWindow(G, 'E')).toEqual([2, 6]);
+    expect(positionWindow(C, 'C')).toEqual([0, 4]);
+    expect(positionWindow(C, 'G')).toEqual([4, 8]);
+    expect(positionWindow(4, 'E')).toEqual([11, 15]);
+    expect(positionWindow(C, 'D')).toEqual([9, 13]);
+  });
+
+  it('keeps every key and shape inside frets 0–15', () => {
+    const shapes: CagedShape[] = ['E', 'D', 'C', 'A', 'G'];
+    for (let key = 0; key < 12; key++) {
+      for (const shape of shapes) {
+        const [from, to] = positionWindow(key, shape);
+        expect(from, `${key} ${shape}`).toBeGreaterThanOrEqual(0);
+        expect(from, `${key} ${shape}`).toBeLessThan(to);
+        expect(to, `${key} ${shape}`).toBeLessThanOrEqual(15);
+        expect(to - from, `${key} ${shape}`).toBeLessThanOrEqual(4);
+      }
+    }
   });
 });
