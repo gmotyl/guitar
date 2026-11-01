@@ -133,3 +133,46 @@ describe('nashville dictionaries', () => {
     }
   });
 });
+
+describe('triads dictionaries', () => {
+  it('PL and EN triads dictionaries have the same keys', () => {
+    const pl = flatten(t('pl').triads);
+    const en = flatten(t('en').triads);
+    expect(Object.keys(en).sort()).toEqual(Object.keys(pl).sort());
+    for (const key of [
+      'modeGroupAria',
+      'modes.inversions',
+      'modes.changes',
+      'rootLabel',
+      'qualityLabel',
+      'quality.major',
+      'quality.minor',
+      'setsLabel',
+      'allSets',
+      'neckLabel',
+      'chordTones',
+      'prev',
+      'next',
+      'inversions.0',
+      'inversions.1',
+      'inversions.2',
+      'now',
+      'detail',
+      'count',
+      'gridAria',
+      'legend.triad',
+      'legend.root',
+      'legend.tones',
+      'boardAria',
+      'boardRegionAria',
+    ]) {
+      expect(Object.keys(pl), key).toContain(key);
+    }
+    expect([t('pl').triads.modes.inversions, t('pl').triads.modes.changes]).toEqual(['Przewroty', 'Zmiany akordów']);
+    expect([t('en').triads.modes.inversions, t('en').triads.modes.changes]).toEqual(['Inversions', 'Chord changes']);
+    const polish = /[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]|\b(struny|progi|przewr|akord|moll|dur)\b/iu;
+    for (const [key, value] of Object.entries(en)) {
+      expect(polish.test(value as string), `en.triads.${key}: ${value}`).toBe(false);
+    }
+  });
+});

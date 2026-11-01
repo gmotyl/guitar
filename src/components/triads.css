@@ -1,0 +1,73 @@
+/* Triads page styles, taken from the mockup
+   (projects/gitara/mockups/2026-11-01-triady-przewroty-strona.html);
+   chips and boards follow nashville.css. Agreed deviation: vertical board in portrait. */
+.sub { color: var(--muted); margin: 0 0 16px; }
+
+/* Mode switch: two joined buttons, the pressed one filled. */
+.modes { display: inline-flex; border: 2px solid var(--fg); border-radius: 10px; overflow: hidden; margin-bottom: 12px; }
+.modes button { font: inherit; font-weight: 600; padding: 6px 16px; border: 0; background: var(--card); color: var(--fg); cursor: pointer; }
+.modes button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+
+.controls { background: var(--bg); padding: 10px 0; margin-bottom: 10px;
+  border-bottom: 1px solid var(--line); display: grid; gap: 8px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 0; }
+.chips .lbl { font-size: .85rem; color: var(--muted); min-width: 88px; }
+.chips button { font: inherit; font-size: .88rem; min-width: 34px; padding: 3px 10px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--card); color: var(--fg); cursor: pointer; }
+.chips button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+button:focus-visible { outline: 2px solid var(--focus, var(--accent)); outline-offset: 2px; }
+
+/* Previous / Next bar with the current Triad and the counter. */
+.stepper { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 0 4px; }
+.stepper .nav { font: inherit; font-weight: 700; padding: 8px 16px; border-radius: 10px; cursor: pointer;
+  border: 2px solid var(--fg); background: var(--card); color: var(--fg); }
+.stepper .nav.next { background: var(--fg); color: var(--bg); }
+.stepper .nav.alt { border-style: dashed; }
+.stepper .now { display: grid; line-height: 1.25; min-width: 0; }
+.stepper .now b { font-size: 1.15rem; }
+.stepper .now span { font-size: .85rem; color: var(--muted); }
+.stepper .count { margin-left: auto; font-size: .85rem; color: var(--muted); }
+
+/* Inversion grid: rows = Rungs up the neck, columns = String sets (set inline per choice). */
+.grid { display: grid; grid-template-columns: auto repeat(4, minmax(0, 1fr)); gap: 4px; margin: 8px 0 0; font-size: .8rem; }
+.grid .h { color: var(--muted); text-align: center; font-weight: 600; }
+.grid .r { color: var(--muted); align-self: center; padding-right: 4px; }
+.grid button { font: inherit; padding: 3px 4px; border-radius: 6px; cursor: pointer; border: 1px solid var(--line); min-width: 0;
+  background: var(--card); color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.grid button small { color: var(--muted); }
+.grid button[aria-pressed="true"] { border-color: var(--k0); background: var(--k0); color: var(--on); }
+.grid button[aria-pressed="true"] small { color: var(--on); }
+
+/* Both orientations are prerendered; the viewport orientation picks one (no JS, no flash). */
+.board { overflow-x: auto; border-radius: 6px; margin-top: 10px; }
+.board svg { display: block; width: 100%; height: auto; }
+.board--h svg { min-width: 640px; }
+.board--v { display: none; }
+.board--v svg { max-width: 420px; margin: 0 auto; }
+@media (orientation: portrait) {
+  .board--h { display: none; }
+  .board--v { display: block; }
+}
+.board svg text { font-family: ui-sans-serif, system-ui, sans-serif; }
+
+/* Legend under the board. */
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .82rem; color: var(--muted); margin: 6px 0 0; }
+.legend > span { display: inline-flex; align-items: center; gap: 4px; }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 50%; }
+.legend .key-triad { background: var(--k0); }
+.legend .key-root { border: 2px solid var(--fg); }
+.legend .key-tones { border: 1.5px solid var(--k0); opacity: .4; }
+
+@media (max-width: 520px) {
+  .stepper .count { margin-left: 0; width: 100%; }
+  .chips .lbl { min-width: 0; flex-basis: 100%; }
+}
+@media (max-width: 480px) {
+  .controls { gap: 6px; padding: 8px 0; }
+  .chips { gap: 4px; }
+  .chips button { font-size: .85rem; min-width: 2.2em; padding: 3px 8px; }
+  .stepper .nav { padding: 8px 12px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .board [data-role="dot"] { transition: opacity .15s ease; }
+}
