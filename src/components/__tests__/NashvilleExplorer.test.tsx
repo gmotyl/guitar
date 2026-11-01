@@ -134,6 +134,11 @@ describe('NashvilleExplorer', () => {
     expect(css).toMatch(/\.ch \.num\s*\{[^}]*color:\s*var\(--sc\)/);
     expect(css).toMatch(/\.ch\[aria-pressed="true"\]\s*\{[^}]*background:\s*color-mix\(in srgb, var\(--sc\)/);
     expect(css).toMatch(/@media \(max-width: 520px\)\s*\{[^}]*\.ch \.num\s*\{\s*font-size/);
+    // 1280 px landscape: horizontal board only; 390 px portrait: vertical board only.
+    expect(css).toMatch(/\.board--v\s*\{\s*display:\s*none;?\s*\}/);
+    const portrait = css.match(/@media \(orientation: portrait\)\s*\{([\s\S]*?)\n\}/)?.[1] ?? '';
+    expect(portrait).toMatch(/\.board--h\s*\{\s*display:\s*none;?\s*\}/);
+    expect(portrait).toMatch(/\.board--v\s*\{\s*display:\s*block;?\s*\}/);
   });
 
   it('draws split bar underline, hold diamond and push mark', () => {
@@ -152,6 +157,11 @@ describe('NashvilleExplorer', () => {
     expect(chords(pair).map((ch) => text(ch.querySelector('.num')))).toEqual(['2-', '5⁷']);
     expect(chords(b[5]).map((ch) => ch.getAttribute('aria-label'))).toEqual(['Takt 6: 2-, Em', 'Takt 6: 5⁷, A7']);
     expect(css).toMatch(/\.pair\s*\{[^}]*border-bottom:\s*2px solid/);
+    // Each part of a split bar selects on its own.
+    fireEvent.click(screen.getByRole('button', { name: 'Takt 6: 5⁷, A7' }));
+    expect(pressedBars(container)).toEqual(['Takt 6: 5⁷, A7']);
+    expect(chords(b[5])[0].getAttribute('aria-pressed')).toBe('false');
+    expect(chordLine(container)).toBe('Na gryfie: 5⁷ = A7 — role R / 3 / 5 / b7');
     // Bar 8: a diamond, a rotated square.
     expect(chords(b[7])[0].classList.contains('hold')).toBe(true);
     expect(container.querySelectorAll('.chart .hold')).toHaveLength(1);
