@@ -42,6 +42,13 @@ export interface FretboardProps {
   dimmedGroups?: string[];
   outlines?: FretOutline[];
   ariaLabel: string;
+  /**
+   * Makes each fret column 0..frets clickable (all six strings), pointer-only:
+   * the click areas are `aria-hidden` and outside the tab order.
+   */
+  onFretClick?: (fret: number) => void;
+  /** Makes band labels clickable; receives the band's `group`. */
+  onBandClick?: (group: string) => void;
 }
 
 const MARKERS = [3, 5, 7, 9, 12, 15];
@@ -223,6 +230,8 @@ export function Fretboard({
   dimmedGroups = [],
   outlines = [],
   ariaLabel,
+  onFretClick,
+  onBandClick,
 }: FretboardProps) {
   const g = geometry(orientation, frets);
   const vertical = orientation === 'vertical';
@@ -238,6 +247,10 @@ export function Fretboard({
   // Wood rect
   const [wx, wy] = g.xy(g.fretAt(0), g.acrossLo);
   const [ww, wh] = g.xy(g.fretAt(frets) - g.fretAt(0), g.acrossHi - g.acrossLo);
+
+  // With column click areas, overlays above them (outlines, dots) let the
+  // pointer through so a click or hover on a dot lands on its column.
+  const passThrough = onFretClick ? 'none' : undefined;
 
   const markers = MARKERS.filter((m) => m <= frets).flatMap((m) =>
     (m === 12 ? [mid - gap, mid + gap] : [mid]).map((c) => ({ m, c })),
@@ -318,7 +331,21 @@ export function Fretboard({
           const [rw, rh] = g.xy(z - a, g.acrossHi - g.acrossLo + 8);
           const [tx, ty] = g.xy((a + z) / 2, lane);
           return (
-            <g key={`b${i}`} data-role="band" data-group={b.group} opacity={b.dimmed ? DIM : opacityFor(b.group, dimmedGroups)}>
+            <g
+              key={`b${i}`}
+              data-role="band"
+              data-group={b.group}
+              opacity={b.dimmed ? DIM : opacityFor(b.group, dimmedGroups)}
+              style={onBandClick ? { cursor: 'pointer' } : undefined}
+              onClick={
+                onBandClick
+                  ? (e: MouseEvent) => {
+                      e.stopPropagation();
+                      onBandClick(b.group ?? '');
+                    }
+                  : undefined
+              }
+            >
               <rect x={rx} y={ry} width={rw} height={rh} rx={8} fill={b.color} opacity={0.1} />
               <line {...line(a, z, lane, lane)} stroke={b.color} stroke-width={3} stroke-linecap="round" />
               <text
@@ -336,6 +363,31 @@ export function Fretboard({
           );
         })}
       </g>
+      {onFretClick && (
+        <g>
+          {Array.from({ length: frets + 1 }, (_, f) => {
+            // Fret 0 is the open-string slot between the board edge and the nut.
+            const lo = f === 0 ? 2 * g.cellAt(0) - g.fretAt(0) : g.fretAt(f - 1);
+            const [x, y] = g.xy(lo, g.acrossLo);
+            const [w, h] = g.xy(g.fretAt(f) - lo, g.acrossHi - g.acrossLo);
+            return (
+              <rect
+                key={`c${f}`}
+                data-role="fret-column"
+                data-fret={f}
+                x={x}
+                y={y}
+                width={w}
+                height={h}
+                fill="transparent"
+                aria-hidden="true"
+                style={{ cursor: 'pointer' }}
+                onClick={() => onFretClick(f)}
+              />
+            );
+          })}
+        </g>
+      )}
       {outlines.length > 0 && (
         <g>
           {outlines.filter((o) => o.cells.length > 0).map((o, i) => (
@@ -349,6 +401,7 @@ export function Fretboard({
               stroke={o.color}
               stroke-width={2.2}
               stroke-linejoin="round"
+              pointer-events={passThrough}
               opacity={o.dimmed ? DIM : opacityFor(o.group, dimmedGroups)}
             />
           ))}
@@ -374,6 +427,7 @@ export function Fretboard({
               data-string={d.string}
               data-fret={d.fret}
               opacity={d.dimmed ? DOT_DIM : opacityFor(d.group, dimmedGroups)}
+              pointer-events={passThrough}
             >
               {split ? (
                 d.colors!.map((c, k) => (

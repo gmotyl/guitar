@@ -27,3 +27,5 @@ h1 { font-size: 1.6rem; margin: 0 0 4px; }
 p, li { max-width: 75ch; }
 a { color: inherit; }
 a:focus-visible, button:focus-visible, .scroll:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+/* Fretboard click areas (multi-shape select): light highlight of the fret column under the pointer. */
+[data-role="fret-column"]:hover { fill: color-mix(in srgb, var(--fg) 8%, transparent); }
