@@ -158,8 +158,11 @@ describe('TriadsExplorer — Inversions mode', () => {
     expect(count(container)).toBe('3 / 16');
     fireEvent.keyDown(document.body, { key: 'ArrowLeft' });
     expect(count(container)).toBe('2 / 16');
-    // Inside a chip row: no step.
+    // Inside a chip row: no step — checked after every press so opposite keys cannot cancel out.
     fireEvent.keyDown(buttons('Akord')[0], { key: 'ArrowRight' });
+    expect(count(container)).toBe('2 / 16');
+    fireEvent.keyDown(buttons('Akord')[0], { key: 'ArrowRight' });
+    expect(count(container)).toBe('2 / 16');
     fireEvent.keyDown(buttons('Struny')[1], { key: 'ArrowLeft' });
     expect(count(container)).toBe('2 / 16');
     // Other keys do nothing.
