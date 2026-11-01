@@ -508,6 +508,32 @@ describe('TriadsExplorer — Chord changes mode', () => {
     expect(pressed('Tonacja')).toEqual(['B♭']);
   });
 
+  it('chips, names and the key line share one spelling', () => {
+    // The mockup rule: flats in the major keys D♭ E♭ F G♭ A♭ B♭ (no C♭ — G♭ major's 4 is B).
+    const { container } = openChanges();
+    click('Tonacja', 'G♭');
+    expect(pressed('Tonacja')).toEqual(['G♭']);
+    expect(field().value).toBe('G♭ B♭ B Bm');
+    expect(tileNames()).toBe('G♭ B♭ B Bm');
+    expect(text(line(container))).toBe('Numbery: 1 3 4 4- · tonacja rozpoznana: G♭-dur');
+    expect(buttons('Gryf').map(text)).toEqual(['pentatonika akordu (G♭ durowa)', 'skala: G♭ jońska']);
+    expect(nowName(container)).toMatch(/· G♭(\/[A-G]♭)?$/);
+    cleanup();
+    history.replaceState(null, '', '/');
+    // Inversions: G♭ major and E♭ minor spell with flats in the bar and the grid.
+    const inv = renderExplorer();
+    click('Akord', 'G♭');
+    expect(nowName(inv.container)).toMatch(/^G♭(\/[A-G]♭)? · /);
+    const gridNames = () => within(group(GRID)).getAllByRole('button').map(text);
+    expect(gridNames().every((n) => /^G♭(\/[A-G]♭)? /.test(n))).toBe(true);
+    click('Jakość', 'moll');
+    click('Akord', 'E♭');
+    expect(pressed('Akord')).toEqual(['E♭']);
+    expect(nowName(inv.container)).toMatch(/^E♭m(\/[A-G]♭)? · /);
+    expect(gridNames().every((n) => /^E♭m(\/[A-G]♭)? /.test(n))).toBe(true);
+    expect(gridNames().some((n) => n.startsWith('E♭m/G♭ '))).toBe(true);
+  });
+
   it('invalid input shows a message and keeps the last path', () => {
     const { container } = openChanges();
     const before = solidFilled(container).map(cell);

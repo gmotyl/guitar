@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { format, type Dict, type Lang } from '../i18n';
 import { role } from '../lib/music/caged';
 import { TUNING, type PitchClass } from '../lib/music/notes';
-import { chordLabel, parseProgression, toNumber, transposeNames, type ParseResult } from '../lib/music/progression';
+import { chordLabel, parseProgression, rootLabel, toNumber, transposeNames, type ParseResult } from '../lib/music/progression';
+import { ownKey, spellNote } from '../lib/music/spelling';
 import { SONG_PRESETS } from '../lib/music/songPresets';
 import { deleteProgression, loadSaved, saveProgression, type SavedProgression } from '../lib/savedProgressions';
 import { readTriadsQuery, writeTriadsQuery } from '../lib/triadsUrl';
@@ -95,7 +96,7 @@ const OVERLAY_R = 7.5;
 const OVERLAY_ROOT_OP = 0.35;
 const OVERLAY_ROOT_R = 9;
 const sameTriad = (a: Triad, b: Triad) => a.set.id === b.set.id && a.frets.every((f, i) => f === b.frets[i]);
-const keyName = (key: PitchClass) => chordLabel({ root: key, quality: 'major' }, key);
+const keyName = (key: PitchClass) => spellNote(key, key);
 const setById = (id: StringSetId) => STRING_SETS.find((s) => s.id === id)!;
 
 /** `format` with every variable in bold (the translation line). */
@@ -106,12 +107,6 @@ function formatBold(template: string, vars: Record<string, string>): ComponentCh
   });
 }
 
-/** Chip label spelling, as in the mockup: flats in the major keys D♭ E♭ F G♭ A♭ B♭, sharps otherwise. */
-const SHARP_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-const FLAT_NAMES = ['C', 'D♭', 'D', 'E♭', 'E', 'F', 'G♭', 'G', 'A♭', 'A', 'B♭', 'B'];
-const FLAT_MAJOR_KEYS: readonly PitchClass[] = [1, 3, 5, 6, 8, 10];
-const chipName = (pc: PitchClass, majorKey: PitchClass) =>
-  (FLAT_MAJOR_KEYS.includes(mod12(majorKey)) ? FLAT_NAMES : SHARP_NAMES)[mod12(pc)];
 const fretsText = (frets: readonly number[]) => frets.join('–');
 const chosenSets = (set: InversionsState['set']): readonly StringSet[] =>
   set === 'all' ? STRING_SETS : STRING_SETS.filter((s) => s.id === set);
@@ -348,7 +343,7 @@ export function TriadsExplorer({ t }: TriadsExplorerProps) {
         });
       }
     });
-    const rootName = chordLabel({ root: curChord.root, quality: 'major' }, prog.key);
+    const rootName = rootLabel(curChord, prog.key);
     const toggleOverlay = (o: Exclude<Overlay, 'none'>) => patchCh({ overlay: ch.overlay === o ? 'none' : o });
     const dots: FretDot[] = [
       ...overlay,
@@ -359,7 +354,9 @@ export function TriadsExplorer({ t }: TriadsExplorerProps) {
       ...others.map(({ tr, i }) => ({ cells: cellsOf(tr) as FretPath['cells'], color: orderColor(i), dashed: true })),
       { cells: curCells as FretPath['cells'], color: curColor },
     ];
-    const curName = triadName(cur);
+    // Chord changes spells every name in the progression key, like the tiles and the key line.
+    const nameInKey = (tr: Triad) => triadName(tr, rootLabel(tr, prog.key));
+    const curName = nameInKey(cur);
 
     return (
       <div class="triads">
@@ -442,7 +439,7 @@ export function TriadsExplorer({ t }: TriadsExplorerProps) {
           </div>
           {chipRow(
             t2.keyLabel,
-            ROOTS.map((pc) => chip(chipName(pc, pc), ch.key === pc, () => pickKey(pc))),
+            ROOTS.map((pc) => chip(spellNote(pc, pc), ch.key === pc, () => pickKey(pc))),
           )}
           {chipRow(
             t.setsLabel,
@@ -491,7 +488,7 @@ export function TriadsExplorer({ t }: TriadsExplorerProps) {
               {format(t2.detail, {
                 inversion: t.inversions[cur.inversion],
                 frets: fretsText(cur.frets),
-                next: triadName(nxt),
+                next: nameInKey(nxt),
                 nextFrets: fretsText(nxt.frets),
               })}
             </span>
@@ -591,7 +588,7 @@ export function TriadsExplorer({ t }: TriadsExplorerProps) {
           t.rootLabel,
           // A minor root is spelled from its relative major.
           ROOTS.map((pc) =>
-            chip(chipName(pc, inv.quality === 'minor' ? pc + 3 : pc), inv.root === pc, () => patchInv({ root: pc, index: 0 })),
+            chip(spellNote(pc, ownKey(pc, inv.quality === 'minor')), inv.root === pc, () => patchInv({ root: pc, index: 0 })),
           ),
         )}
         {chipRow(

@@ -1,6 +1,7 @@
 import { keyChords, type Key } from './keys';
-import { noteName, type PitchClass } from './notes';
+import type { PitchClass } from './notes';
 import { stepPc, type Step } from './numbers';
+import { spellFlat, spellNote } from './spelling';
 import type { PathChord } from './triads';
 
 export type ProgressionKind = 'numbers' | 'names';
@@ -105,17 +106,17 @@ export function toNumber(chord: PathChord, key: PitchClass): string {
   return '?'; // unreachable: every semitone is a step or a flattened step
 }
 
-/** Any flat key spells every pitch class with flats (F major is one). */
-const FLAT_SPELLING = majorKey(5);
-
 /**
- * Chord symbol spelled like the major key, flats shown as ♭: 'F#m', 'B♭'. A root outside the
- * scale is the flat of the next step, as in `toNumber` (b7 in C → 'B♭', b3 in E → 'G').
+ * The chord's root spelled for the major key by the Triads page rule (see `spelling.ts`); a root
+ * outside the scale is the flat of the next step, as in `toNumber` (b7 in C → 'B♭', b3 in E → 'G').
  */
+export function rootLabel(chord: PathChord, key: PitchClass): string {
+  return toNumber(chord, key).startsWith('b') ? spellFlat(chord.root) : spellNote(chord.root, key);
+}
+
+/** Chord symbol spelled like the major key, flats shown as ♭: 'F#m', 'B♭'. */
 export function chordLabel(chord: PathChord, key: PitchClass): string {
-  const outside = toNumber(chord, key).startsWith('b');
-  const name = noteName(chord.root, outside ? FLAT_SPELLING : majorKey(key));
-  return name.replace('b', '♭') + (chord.quality === 'minor' ? 'm' : '');
+  return rootLabel(chord, key) + (chord.quality === 'minor' ? 'm' : '');
 }
 
 /** Typed chord names moved to the key `to` (sevenths kept); null when `src` is not all valid names. */

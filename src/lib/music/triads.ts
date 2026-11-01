@@ -1,5 +1,6 @@
 import { role, type Role } from './caged';
-import { TUNING, noteName, type PitchClass } from './notes';
+import { TUNING, type PitchClass } from './notes';
+import { ownKey, spellFlat, spellNote, spellSharp } from './spelling';
 
 export type TriadQuality = 'major' | 'minor';
 export type StringSetId = 'EAD' | 'ADG' | 'DGB' | 'GBe';
@@ -87,17 +88,20 @@ export function rungOrder(root: PitchClass, quality: TriadQuality, sets: readonl
   return out;
 }
 
-/** Note name with '♭' for flats, spelled in the chord's own key (a minor chord thus spells like its relative major). */
-function spell(pc: PitchClass, root: PitchClass, quality: TriadQuality): string {
-  return noteName(pc, { root, quality }).replace(/^([A-G])b$/, '$1♭');
-}
-
-/** Chord symbol with a slash bass for inversions, e.g. 'C/G', 'Gm/B♭'. */
-export function triadName(t: Triad): string {
-  const name = spell(t.root, t.root, t.quality) + (t.quality === 'minor' ? 'm' : '');
+/**
+ * Chord symbol with a slash bass for inversions, e.g. 'C/G', 'Gm/B♭'. The root is spelled in the
+ * chord's own key (a minor chord's relative major) unless `rootName` gives it (Chord changes
+ * spells roots in the progression key). The bass follows the root's accidental; a natural root
+ * leaves it to the chord's own key.
+ */
+export function triadName(t: Triad, rootName?: string): string {
+  const own = ownKey(t.root, t.quality === 'minor');
+  const root = rootName ?? spellNote(t.root, own);
+  const name = root + (t.quality === 'minor' ? 'm' : '');
   if (t.inversion === 0) return name;
   const bass = mod12(TUNING[t.set.strings[0]].pc + t.frets[0]);
-  return `${name}/${spell(bass, t.root, t.quality)}`;
+  const bassName = root.includes('#') ? spellSharp(bass) : root.includes('♭') ? spellFlat(bass) : spellNote(bass, own);
+  return `${name}/${bassName}`;
 }
 
 export interface PathChord {
