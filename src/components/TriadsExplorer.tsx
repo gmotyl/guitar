@@ -2,7 +2,7 @@ import type { ComponentChildren } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { format, type Dict, type Lang } from '../i18n';
 import { role } from '../lib/music/caged';
-import { TUNING, noteName, type PitchClass } from '../lib/music/notes';
+import { TUNING, type PitchClass } from '../lib/music/notes';
 import { chordLabel, parseProgression, toNumber, transposeNames, type ParseResult } from '../lib/music/progression';
 import { SONG_PRESETS } from '../lib/music/songPresets';
 import { deleteProgression, loadSaved, saveProgression, type SavedProgression } from '../lib/savedProgressions';
@@ -105,9 +105,12 @@ function formatBold(template: string, vars: Record<string, string>): ComponentCh
   });
 }
 
-/** A note spelled in the chord's own key, flats as '♭' (a minor chord spells like its relative major). */
-const spell = (pc: PitchClass, root: PitchClass, quality: TriadQuality) =>
-  noteName(pc, { root, quality }).replace(/^([A-G])b$/, '$1♭');
+/** Chip label spelling, as in the mockup: flats in the major keys D♭ E♭ F G♭ A♭ B♭, sharps otherwise. */
+const SHARP_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const FLAT_NAMES = ['C', 'D♭', 'D', 'E♭', 'E', 'F', 'G♭', 'G', 'A♭', 'A', 'B♭', 'B'];
+const FLAT_MAJOR_KEYS: readonly PitchClass[] = [1, 3, 5, 6, 8, 10];
+const chipName = (pc: PitchClass, majorKey: PitchClass) =>
+  (FLAT_MAJOR_KEYS.includes(mod12(majorKey)) ? FLAT_NAMES : SHARP_NAMES)[mod12(pc)];
 const fretsText = (frets: readonly number[]) => frets.join('–');
 const chosenSets = (set: InversionsState['set']): readonly StringSet[] =>
   set === 'all' ? STRING_SETS : STRING_SETS.filter((s) => s.id === set);
@@ -395,7 +398,7 @@ export function TriadsExplorer({ t }: TriadsExplorerProps) {
           </div>
           {chipRow(
             t2.keyLabel,
-            ROOTS.map((pc) => chip(keyName(pc), ch.key === pc, () => pickKey(pc))),
+            ROOTS.map((pc) => chip(chipName(pc, pc), ch.key === pc, () => pickKey(pc))),
           )}
           {chipRow(
             t.setsLabel,
@@ -542,7 +545,10 @@ export function TriadsExplorer({ t }: TriadsExplorerProps) {
       <div class="controls">
         {chipRow(
           t.rootLabel,
-          ROOTS.map((pc) => chip(spell(pc, pc, inv.quality), inv.root === pc, () => patchInv({ root: pc, index: 0 }))),
+          // A minor root is spelled from its relative major.
+          ROOTS.map((pc) =>
+            chip(chipName(pc, inv.quality === 'minor' ? pc + 3 : pc), inv.root === pc, () => patchInv({ root: pc, index: 0 })),
+          ),
         )}
         {chipRow(
           t.qualityLabel,

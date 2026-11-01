@@ -66,7 +66,8 @@ describe('TriadsExplorer — Inversions mode', () => {
     ]);
     const groups = Array.from(container.querySelectorAll('.controls [role="group"]'));
     expect(groups.map((g) => text(g.querySelector('.lbl')))).toEqual(['Akord', 'Jakość', 'Struny', 'Gryf']);
-    expect(buttons('Akord').map(text)).toEqual(['C', 'D♭', 'D', 'E♭', 'E', 'F', 'F#', 'G', 'A♭', 'A', 'B♭', 'B']);
+    // Chip spelling follows the mockup: flat keys (D♭ E♭ F G♭ A♭ B♭) spell flat.
+    expect(buttons('Akord').map(text)).toEqual(['C', 'D♭', 'D', 'E♭', 'E', 'F', 'G♭', 'G', 'A♭', 'A', 'B♭', 'B']);
     expect(pressed('Akord')).toEqual(['C']);
     expect(buttons('Jakość').map(text)).toEqual(['dur', 'moll']);
     expect(pressed('Jakość')).toEqual(['dur']);
@@ -226,8 +227,8 @@ describe('TriadsExplorer — Inversions mode', () => {
     const names = within(group(GRID)).getAllByRole('button').map(text);
     expect(names.some((n) => n.startsWith('Gm/B♭ '))).toBe(true);
     expect(names.some((n) => n.includes('A#'))).toBe(false);
-    // Root chips are spelled in the chosen quality: B♭ minor stays flat, D# minor sharp.
-    expect(buttons('Akord').map(text)).toEqual(['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'B♭', 'B']);
+    // Root chips are spelled from the relative major, as in the mockup: B♭ and E♭ minor flat, C# F# G# minor sharp.
+    expect(buttons('Akord').map(text)).toEqual(['C', 'C#', 'D', 'E♭', 'E', 'F', 'F#', 'G', 'G#', 'A', 'B♭', 'B']);
     expect(nowName(container)).toMatch(/^Gm/);
   });
 
@@ -313,7 +314,9 @@ describe('TriadsExplorer — Chord changes mode', () => {
       'Wonderful Tonight', 'Jolene', 'Wehikuł czasu', 'No Woman, No Cry',
     ]);
     expect(select.value).toBe('creep');
-    expect(buttons('Tonacja').map(text)).toEqual(['C', 'D♭', 'D', 'E♭', 'E', 'F', 'F#', 'G', 'A♭', 'A', 'B♭', 'B']);
+    expect(buttons('Tonacja').map(text)).toEqual(['C', 'D♭', 'D', 'E♭', 'E', 'F', 'G♭', 'G', 'A♭', 'A', 'B♭', 'B']);
+    click('Tonacja', 'G♭');
+    expect(pressed('Tonacja')).toEqual(['G♭']);
     expect(buttons('Struny').map(text)).toEqual(['E-A-D', 'A-D-G', 'D-G-B', 'G-B-e']);
     expect(pressed('Struny')).toEqual(['G-B-e']);
     // The field looks like the mockup.
