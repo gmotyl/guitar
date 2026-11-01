@@ -99,3 +99,81 @@ export function triadName(t: Triad): string {
   const bass = mod12(TUNING[t.set.strings[0]].pc + t.frets[0]);
   return `${name}/${spell(bass, t.root, t.quality)}`;
 }
+
+export interface PathChord {
+  root: PitchClass;
+  quality: TriadQuality;
+}
+
+const wrap = (n: number, m: number) => ((n % m) + m) % m;
+
+/**
+ * A Triad path on one String set: Triad 0 = the first chord's Triad at `start mod n`; each next
+ * Triad is the next chord's Triad with the least summed |fret difference| to the previous one,
+ * ties to the lower fret sum.
+ */
+export function triadPath(chords: readonly PathChord[], set: StringSet, start: number): Triad[] {
+  if (chords.length === 0) return [];
+  const first = triads(chords[0].root, chords[0].quality, set);
+  if (first.length === 0) return [];
+  const path: Triad[] = [first[wrap(start, first.length)]];
+  for (const chord of chords.slice(1)) {
+    const prev = path[path.length - 1];
+    const dist = (t: Triad) => t.frets.reduce((acc, f, i) => acc + Math.abs(f - prev.frets[i]), 0);
+    // Candidates are sorted by fret sum, so a strict `<` keeps the lower one on ties.
+    let best: Triad | undefined;
+    for (const t of triads(chord.root, chord.quality, set)) if (!best || dist(t) < dist(best)) best = t;
+    if (!best) break;
+    path.push(best);
+  }
+  return path;
+}
+
+export interface ScaleNote {
+  pc: PitchClass;
+  /** Interval label relative to the chord root: 'R' | 'b2' | '2' | 'b3' | '3' | '4' | '#4' | '5' | 'b6' | '6' | 'b7' | '7'. */
+  label: string;
+}
+
+const LABELS = ['R', 'b2', '2', 'b3', '3', '4', '#4', '5', 'b6', '6', 'b7', '7'];
+const notesFrom = (root: PitchClass, intervals: readonly number[]): ScaleNote[] =>
+  intervals.map((i) => ({ pc: mod12(root + i), label: LABELS[mod12(i)] }));
+
+const PENTATONIC: Record<TriadQuality, readonly number[]> = {
+  major: [0, 2, 4, 7, 9],
+  minor: [0, 3, 5, 7, 10],
+};
+
+/** The current chord's pentatonic: major for a major chord, minor for a minor one, rooted on the chord. */
+export function chordPentatonic(chord: PathChord): ScaleNote[] {
+  return notesFrom(chord.root, PENTATONIC[chord.quality]);
+}
+
+export type ModeName = 'ionian' | 'dorian' | 'phrygian' | 'lydian' | 'mixolydian' | 'aeolian';
+
+const MAJOR_SCALE = [0, 2, 4, 5, 7, 9, 11];
+/** Key chords of the major key, steps 1–6: [mode, diatonic quality]. */
+const STEPS: readonly [ModeName, TriadQuality][] = [
+  ['ionian', 'major'],
+  ['dorian', 'minor'],
+  ['phrygian', 'minor'],
+  ['lydian', 'major'],
+  ['mixolydian', 'major'],
+  ['aeolian', 'minor'],
+];
+
+/** Intervals of the mode on major-scale `step` (0-based), from its own root. */
+const modeIntervals = (step: number) => MAJOR_SCALE.map((_, i) => mod12(MAJOR_SCALE[(step + i) % 7] - MAJOR_SCALE[step]));
+
+/**
+ * The scale over `chord` in the major key on `keyRoot`: a key chord (steps 1–6 with the diatonic
+ * quality) gets the key's major scale read from its root (that step's mode); any other chord gets
+ * Mixolydian (major) or Dorian (minor) on its root.
+ */
+export function chordScale(chord: PathChord, keyRoot: PitchClass): { mode: ModeName; notes: ScaleNote[] } {
+  const step = STEPS.findIndex(
+    ([, quality], i) => quality === chord.quality && mod12(keyRoot + MAJOR_SCALE[i]) === mod12(chord.root),
+  );
+  const s = step >= 0 ? step : chord.quality === 'major' ? 4 : 1;
+  return { mode: STEPS[s][0], notes: notesFrom(chord.root, modeIntervals(s)) };
+}
