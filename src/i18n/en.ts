@@ -122,7 +122,7 @@ export const en: Dict = {
     keyGroupAria: 'Key',
     presetLabel: 'Progression:',
     presetGroupAria: 'Progression',
-    tableLabel: 'Steps:',
+    tableLabel: 'Numbers:',
     tableGroupAria: 'Key chords by step',
     presets: {
       blues: '12-bar blues',
@@ -150,7 +150,7 @@ export const en: Dict = {
     all: 'all',
     shapeWindow: 'shape {shape} · frets {from}–{to}',
     barAria: 'Bar {bar}: {number}, {chord}',
-    tableAria: 'Step {number}: {chord}',
+    tableAria: 'Number {number}: {chord}',
     boardAria: 'The {chord} chord on frets 0–{max}',
     boardRegionAria: 'Fretboard: the {chord} chord',
   },
