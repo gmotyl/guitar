@@ -162,6 +162,8 @@ test('menu: screen-on preference persists', async ({ browser }) => {
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');
 
   await page.reload();
+  // The Menu island (client:load) must hydrate again before it reacts to the click.
+  await expect(page.locator('astro-island[ssr]')).toHaveCount(0);
   expect(await page.evaluate(() => localStorage.getItem('guitar.wakeLock'))).toBe('off');
   await page.getByRole('button', { name: 'Otwórz menu' }).click();
   await expect(page.locator('.menu-switch')).toHaveAttribute('aria-pressed', 'false');
