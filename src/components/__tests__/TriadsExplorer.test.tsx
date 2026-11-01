@@ -790,6 +790,29 @@ describe('TriadsExplorer — own progressions', () => {
     expect(prompt).not.toHaveBeenCalled();
   });
 
+  it('Escape closes the name field', () => {
+    openChanges();
+    fireEvent.click(button('Zapisz jako…')!);
+    fireEvent.input(nameField()!, { target: { value: 'Moja' } });
+    fireEvent.keyDown(nameField()!, { key: 'Escape' });
+    expect(nameField()).toBeNull();
+    expect(button('Zapisz jako…')).not.toBeNull();
+    expect(stored()).toBeNull();
+  });
+
+  it('save is disabled while the field text is invalid', () => {
+    openChanges();
+    fireEvent.click(button('Zapisz jako…')!);
+    fireEvent.input(nameField()!, { target: { value: 'Moja' } });
+    expect(button('Zapisz')!.hasAttribute('disabled')).toBe(false);
+    typeProg('G X');
+    expect(button('Zapisz')!.hasAttribute('disabled')).toBe(true);
+    fireEvent.submit(nameField()!.closest('form')!);
+    expect(stored()).toBeNull();
+    typeProg('G C D');
+    expect(button('Zapisz')!.hasAttribute('disabled')).toBe(false);
+  });
+
   it('a saved progression is listed under Moje progresje and can be picked', () => {
     const setItem = vi.spyOn(Storage.prototype, 'setItem');
     openChanges();

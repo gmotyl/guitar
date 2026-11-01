@@ -273,7 +273,7 @@ export function TriadsExplorer({ t }: TriadsExplorerProps) {
     };
     const saveOwn = () => {
       const name = saveName?.trim();
-      if (!name) return;
+      if (!name || !parsed.ok) return;
       setSaved(saveProgression({ name, src: ch.src, key: ch.key }));
       setSaveName(null);
       patchCh({ preset: OWN + name });
@@ -428,7 +428,7 @@ export function TriadsExplorer({ t }: TriadsExplorerProps) {
                   onInput={(e) => setSaveName((e.currentTarget as HTMLInputElement).value)}
                   ref={nameRef}
                 />
-                <button type="submit" class="act" disabled={saveName.trim() === ''}>
+                <button type="submit" class="act" disabled={!parsed.ok || saveName.trim() === ''}>
                   {t2.save}
                 </button>
                 <button type="button" class="act" onClick={() => setSaveName(null)}>
