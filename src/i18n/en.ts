@@ -154,8 +154,11 @@ export const en: Dict = {
     boardAria: 'The {chord} chord on frets 0–{max}',
     boardRegionAria: 'Fretboard: the {chord} chord',
   },
-  // Triads page (Inversions mode). Page title / subtitle land with the page itself.
+  // Triads page.
   triads: {
+    title: 'Triads and inversions',
+    subtitle:
+      'The fretboard always highlights a Triad: three notes on three adjacent strings, never a full chord shape. Inversions mode teaches the shapes of one chord on the four String sets. Chord changes mode plays a progression as Triads in one area of the neck. Standard tuning E A D G B E.',
     modeGroupAria: 'Mode',
     modes: { inversions: 'Inversions', changes: 'Chord changes' },
     rootLabel: 'Chord',

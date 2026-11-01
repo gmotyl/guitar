@@ -27,6 +27,14 @@ export function Menu({ lang, slug, labels, langNames }: MenuProps) {
   // Off until mounted: the server render has no navigator, so the switch appears after hydration.
   const [wakeSupported, setWakeSupported] = useState(false);
   const [wakeOn, setWakeOn] = useState(false);
+  // The current query string, so the language switch keeps page state (e.g. a triads progression).
+  // Empty in the server render; read on mount and whenever the menu opens, because islands
+  // rewrite the query with replaceState after load.
+  const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    setSearch(location.search);
+  }, [open]);
 
   useEffect(() => {
     if (!isWakeLockSupported()) return;
@@ -111,7 +119,17 @@ export function Menu({ lang, slug, labels, langNames }: MenuProps) {
                 {langNames[l]}
               </span>
             ) : (
-              <a key={l} href={`/${l}/${slug}`} hreflang={l} lang={l} onClick={() => storeLang(l)}>
+              <a
+                key={l}
+                href={`/${l}/${slug}${search}`}
+                hreflang={l}
+                lang={l}
+                onClick={(e) => {
+                  // Take the query as it is now, not as it was when the menu opened.
+                  e.currentTarget.href = `/${l}/${slug}${location.search}`;
+                  storeLang(l);
+                }}
+              >
                 {langNames[l]}
               </a>
             ),

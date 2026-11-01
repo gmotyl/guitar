@@ -158,8 +158,11 @@ export const pl = {
     boardAria: 'Akord {chord} na progach 0–{max}',
     boardRegionAria: 'Gryf: akord {chord}',
   },
-  // Triads page (Inversions mode). Page title / subtitle land with the page itself.
+  // Triads page.
   triads: {
+    title: 'Triady i przewroty',
+    subtitle:
+      'Na gryfie zawsze wyróżniona jest triada: trzy dźwięki na trzech sąsiednich strunach, nigdy pełny chwyt. Tryb Przewroty uczy kształtów jednego akordu na czterech grupach strun. Tryb Zmiany akordów gra progresję triadami w jednym rejonie gryfu. Strój standardowy E A D G B E.',
     modeGroupAria: 'Tryb',
     modes: { inversions: 'Przewroty', changes: 'Zmiany akordów' },
     rootLabel: 'Akord',

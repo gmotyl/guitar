@@ -323,3 +323,58 @@ describe('nashville page build output', () => {
     expect(text(d.body)).toContain('12-bar blues');
   });
 });
+
+describe('triads page build output', () => {
+  const text = (el: Element | null | undefined) => el?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+
+  it('build emits both triads pages and the redirect stub', () => {
+    const titles = { pl: 'Triady i przewroty', en: 'Triads and inversions' } as const;
+    for (const lang of ['pl', 'en'] as const) {
+      const file = `${lang}/triads/index.html`;
+      expect(existsSync(join(DIST, file)), `dist/${file}`).toBe(true);
+      const d = doc(file);
+      expect(d.documentElement.getAttribute('lang')).toBe(lang);
+      const alt = (h: string) => d.querySelector(`link[rel="alternate"][hreflang="${h}"]`)?.getAttribute('href');
+      expect(alt('pl')).toBe(`${SITE}/pl/triads`);
+      expect(alt('en')).toBe(`${SITE}/en/triads`);
+      expect(alt('x-default')).toBe(`${SITE}/triads`);
+      const dict = t(lang).triads;
+      expect(dict.title).toBe(titles[lang]);
+      expect(text(d.querySelector('title'))).toBe(titles[lang]);
+      expect(text(d.querySelector('main h1'))).toBe(titles[lang]);
+      expect(dict.subtitle.trim()).not.toBe('');
+      expect(text(d.querySelector('main .sub'))).toBe(dict.subtitle);
+      // The explorer island is server-rendered and hydrated.
+      expect(d.querySelector('astro-island[component-url*="TriadsExplorer"]')).not.toBeNull();
+      expect(text(d.querySelector('main [role="group"][aria-label="' + dict.modeGroupAria + '"]'))).toContain(
+        dict.modes.inversions,
+      );
+
+      // Menu lists the four pages, the last one being triads.
+      const menu = Array.from(d.querySelectorAll('header.site-header #site-menu nav a')).slice(1);
+      expect(menu.map((a) => a.getAttribute('href'))).toEqual(PAGES.map((p) => `/${lang}/${p.slug}`));
+      expect(menu).toHaveLength(4);
+      expect(text(menu[3])).toBe(titles[lang]);
+      expect(menu[3].getAttribute('aria-current')).toBe('page');
+
+      // Home shows four tiles, the last one being triads.
+      const tiles = Array.from(doc(`${lang}/index.html`).querySelectorAll('main .tiles a'));
+      expect(tiles).toHaveLength(4);
+      expect(tiles[3].getAttribute('href')).toBe(`/${lang}/triads`);
+      expect(text(tiles[3])).toContain(titles[lang]);
+    }
+
+    const stub = read('triads/index.html');
+    expect(stub).toContain('guitar.lang');
+    expect(stub).toContain('location.replace');
+    const noscript = stub.match(/<noscript>([\s\S]*?)<\/noscript>/)?.[1] ?? '';
+    expect(noscript).toContain('href="/pl/triads"');
+    expect(noscript).toContain('href="/en/triads"');
+  });
+
+  it('english triads header has no Polish copy', () => {
+    const d = doc('en/triads/index.html');
+    expect(text(d.querySelector('main h1'))).not.toMatch(/[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/);
+    expect(text(d.querySelector('main .sub'))).not.toMatch(/[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/);
+  });
+});

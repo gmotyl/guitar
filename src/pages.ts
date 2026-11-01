@@ -32,4 +32,12 @@ export const PAGES: readonly SitePage[] = [
       en: 'Chords written as scale-step numbers: change the key and the numbers stay. Progressions as a chart with the chord on the fretboard.',
     },
   },
+  {
+    slug: 'triads',
+    title: { pl: 'Triady i przewroty', en: 'Triads and inversions' },
+    blurb: {
+      pl: 'Triady na trzech sąsiednich strunach: przewroty jednego akordu na czterech grupach strun albo progresja zagrana triadami w jednym rejonie gryfu.',
+      en: 'Triads on three adjacent strings: the inversions of one chord on four String sets, or a progression played as Triads in one area of the neck.',
+    },
+  },
 ];
