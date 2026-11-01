@@ -28,8 +28,12 @@ export const DEFAULT_STATE: TriadsState = {
 const SET_IDS: readonly StringSetId[] = ['EAD', 'ADG', 'DGB', 'GBe'];
 const QUALITY_PARAM: Record<TriadQuality, string> = { major: 'maj', minor: 'min' };
 
-/** A non-negative integer written in plain digits, else null. */
-const nat = (v: string | null): number | null => (v !== null && /^\d+$/.test(v) ? Number(v) : null);
+/** A non-negative safe integer written in plain digits, else null (huge digit runs would read as Infinity). */
+const nat = (v: string | null): number | null => {
+  if (v === null || !/^\d+$/.test(v)) return null;
+  const n = Number(v);
+  return Number.isSafeInteger(n) ? n : null;
+};
 const pitchClass = (v: string | null): PitchClass | null => {
   const n = nat(v);
   return n !== null && n <= 11 ? n : null;

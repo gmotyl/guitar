@@ -39,6 +39,12 @@ describe('triadsUrl', () => {
       readTriadsQuery('?mode=xyz&root=99&q=dim&set=XYZ&i=-1&key=12&start=-2&overlay=both'),
     ).toEqual(DEFAULT_STATE);
     expect(readTriadsQuery('?root=1.5&i=abc&key=&start=1e2')).toEqual(DEFAULT_STATE);
+    // Digits past the safe-integer range (they would read as Infinity or lose precision) are invalid.
+    const huge = '9'.repeat(400);
+    expect(readTriadsQuery(`?mode=changes&i=${huge}&start=${huge}`).changes.start).toBe(0);
+    expect(readTriadsQuery(`?i=${huge}`).inversions.index).toBe(0);
+    expect(readTriadsQuery('?start=9007199254740993').changes.start).toBe(0);
+    expect(readTriadsQuery('?start=9007199254740991').changes.start).toBe(9007199254740991);
     // `all` is an Inversions-only set.
     expect(readTriadsQuery('?mode=changes&set=all').changes.set).toBe('GBe');
     expect(readTriadsQuery('?set=all').inversions.set).toBe('all');

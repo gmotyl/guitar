@@ -956,6 +956,22 @@ describe('TriadsExplorer — state in the URL', () => {
     expect(count(r.container)).toBe('1 / 16');
   });
 
+  it('an overflowing start or index in a link falls back to the default', () => {
+    const huge = '9'.repeat(400);
+    visit(`?mode=changes&prog=C+G+Am+F&start=${huge}&i=${huge}`);
+    const { container } = renderExplorer();
+    expect(tileNames()).toBe('C G Am F');
+    expect(currentTile()).toBe(0);
+    expect(nowName(container)).toMatch(/^1\. 1 · C/);
+    next();
+    expect(currentTile()).toBe(1);
+    cleanup();
+    visit(`?root=9&i=${huge}`);
+    const r = renderExplorer();
+    expect(pressed('Akord')).toEqual(['A']);
+    expect(count(r.container)).toMatch(/^1 \/ /);
+  });
+
   it('state changes replace the URL query', () => {
     visit('');
     const replace = vi.spyOn(history, 'replaceState');
