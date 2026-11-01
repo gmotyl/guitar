@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { TriadsExplorer } from '../TriadsExplorer';
 import { t } from '../../i18n';
+import { STRING_SETS, triads } from '../../lib/music/triads';
 
 const renderExplorer = (lang: 'pl' | 'en' = 'pl') => render(<TriadsExplorer lang={lang} t={t(lang).triads} />);
 const text = (el: Element | null | undefined) => el?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
@@ -248,5 +249,298 @@ describe('TriadsExplorer — Inversions mode', () => {
     expect(css).toMatch(/\.chips\s*\{[^}]*flex-wrap:\s*wrap/);
     expect(css).toMatch(/\.stepper\s*\{[^}]*flex-wrap:\s*wrap/);
     expect(css).toMatch(/minmax\(0,\s*1fr\)/);
+  });
+});
+
+// Chord changes helpers.
+const FIELD = 'Progresja — Numbery albo nazwy akordów';
+const openChanges = (lang: 'pl' | 'en' = 'pl') => {
+  const r = renderExplorer(lang);
+  click(lang === 'pl' ? 'Tryb' : 'Mode', lang === 'pl' ? 'Zmiany akordów' : 'Chord changes');
+  return r;
+};
+const field = () => screen.getByLabelText<HTMLInputElement>(FIELD);
+const typeProg = (value: string) => fireEvent.input(field(), { target: { value } });
+const line = (c: Element) => c.querySelector('.entry .tr')!;
+const tiles = () => buttons('Progresja');
+const tileText = (b: Element) =>
+  ['.ord', '.num', '.name'].map((s) => text(b.querySelector(s))).join(' ');
+const currentTile = () => tiles().findIndex((b) => b.getAttribute('aria-pressed') === 'true');
+const tileNames = () => tiles().map((b) => text(b.querySelector('.name'))).join(' ');
+const songSelect = () => screen.getByLabelText<HTMLSelectElement>('Utwory');
+const otherStart = () => fireEvent.click(screen.getByRole('button', { name: '↻ Inny przewrót' }));
+const isDashed = (d: Element) => d.querySelector('[stroke-dasharray]') !== null;
+const dashedDots = (c: Element) => dots(c).filter(isDashed);
+const solidFilled = (c: Element) => filledDots(c).filter((d) => !isDashed(d));
+const arcColors = (d: Element) =>
+  Array.from(d.querySelectorAll('[data-role="arc"]')).map((a) => a.getAttribute('stroke'));
+const dotAt = (c: Element, at: string) => dots(c).find((d) => cell(d) === at)!;
+const triadPaths = (c: Element) => Array.from(hBoard(c).querySelectorAll('[data-role="triad-path"]'));
+
+describe('TriadsExplorer — Chord changes mode', () => {
+  afterEach(cleanup);
+
+  it('opens Chord changes on Creep with its translation line', () => {
+    const { container } = openChanges();
+    expect(pressed('Tryb')).toEqual(['Zmiany akordów']);
+    expect(field().value).toBe('G B C Cm');
+    expect(text(line(container))).toBe('Numbery: 1 3 4 4- · tonacja rozpoznana: G-dur');
+    expect(Array.from(line(container).querySelectorAll('b')).map(text)).toEqual(['1 3 4 4-', 'G']);
+    expect(line(container).classList.contains('err')).toBe(false);
+    expect(pressed('Tonacja')).toEqual(['G']);
+    cleanup();
+    const en = openChanges('en');
+    expect(screen.getByLabelText<HTMLInputElement>('Progression — Numbers or chord names').value).toBe('G B C Cm');
+    expect(text(line(en.container))).toBe('Numbers: 1 3 4 4- · detected key: G major');
+  });
+
+  it('lists the Chord changes controls in mockup order', () => {
+    const { container } = openChanges();
+    const root = container.firstElementChild!;
+    expect(Array.from(root.children).map((el) => el.classList[0])).toEqual([
+      'modes', 'entry', 'controls', 'prog', 'stepper', 'board', 'board', 'legend',
+    ]);
+    const rows = Array.from(container.querySelectorAll('.controls > *'));
+    expect(rows.map((r) => text(r.querySelector('.lbl')))).toEqual(['Utwory', 'Tonacja', 'Struny']);
+    // Utwory: a select with the 13 songs in a group "Utwory", Creep picked.
+    const select = songSelect();
+    expect(rows[0].contains(select)).toBe(true);
+    const songs = select.querySelector('optgroup[label="Utwory"]')!;
+    expect(Array.from(songs.querySelectorAll('option')).map(text)).toEqual([
+      'Creep', 'Wish You Were Here', "Blowin' in the Wind", 'Time', 'Hit the Road Jack',
+      'House of the Rising Sun', 'Hey Jude', "Knockin' on Heaven's Door", 'A Horse with No Name',
+      'Wonderful Tonight', 'Jolene', 'Wehikuł czasu', 'No Woman, No Cry',
+    ]);
+    expect(select.value).toBe('creep');
+    expect(buttons('Tonacja').map(text)).toEqual(['C', 'D♭', 'D', 'E♭', 'E', 'F', 'F#', 'G', 'A♭', 'A', 'B♭', 'B']);
+    expect(buttons('Struny').map(text)).toEqual(['E-A-D', 'A-D-G', 'D-G-B', 'G-B-e']);
+    expect(pressed('Struny')).toEqual(['G-B-e']);
+    // The field looks like the mockup.
+    expect(css).toMatch(/\.entry input\s*\{[^}]*border-radius:\s*8px/);
+  });
+
+  it('renders progression tiles in order colours with the current one filled', () => {
+    openChanges();
+    expect(tiles().map(tileText)).toEqual(['1. 1 G', '2. 3 B', '3. 4 C', '4. 4- Cm']);
+    expect(tiles().map((b) => b.getAttribute('style'))).toEqual([0, 1, 2, 3].map((k) => `--sc: var(--k${k});`));
+    expect(currentTile()).toBe(0);
+    expect(tiles().filter((b) => b.getAttribute('aria-pressed') === 'true')).toHaveLength(1);
+    next();
+    expect(currentTile()).toBe(1);
+    expect(tiles().filter((b) => b.getAttribute('aria-pressed') === 'true')).toHaveLength(1);
+    // Colours cycle after --k6.
+    typeProg('F C C F B♭ F C F');
+    expect(tiles().map((b) => b.getAttribute('style')?.match(/--k(\d)/)?.[1])).toEqual(
+      ['0', '1', '2', '3', '4', '5', '6', '0'],
+    );
+    expect(tileNames()).toBe('F C C F B♭ F C F');
+    // Dashed border in the order colour, the current tile filled; --k0…--k6 defined for the page.
+    expect(css).toMatch(/\.prog button\s*\{[^}]*border:\s*2px dashed var\(--sc\)/);
+    expect(css).toMatch(/\.prog button\[aria-pressed="true"\]\s*\{[^}]*background:\s*var\(--sc\)/);
+    expect(css).toMatch(/\.triads\s*\{[^}]*--k6:/);
+  });
+
+  it('shows Previous, Next and the other-start button without a left arrow', () => {
+    const { container } = openChanges();
+    const bar = container.querySelector('.stepper')!;
+    const navs = Array.from(bar.querySelectorAll('button'));
+    expect(navs.map(text)).toEqual(['← Poprzedni', 'Next →', '↻ Inny przewrót']);
+    expect(navs[2].classList.contains('alt')).toBe(true);
+    expect(text(navs[2])).not.toContain('←');
+    expect(css).toMatch(/\.stepper \.nav\.alt\s*\{[^}]*border-style:\s*dashed/);
+    expect(nowName(container)).toBe('1. 1 · G/B');
+    expect(nowDetail(container)).toBe('teraz 1. przewrót, progi 4–3–3 → dalej B (progi 4–4–2)');
+    // Shared notes with the next Triad: G/B→B shares B; B→C none; C→Cm shares C and G; Cm→G/B shares G.
+    expect(count(container)).toBe('wspólne dźwięki z następnym: 1');
+    next();
+    expect(nowName(container)).toBe('2. 3 · B');
+    expect(count(container)).toBe('wspólne dźwięki z następnym: 0');
+    next();
+    expect(count(container)).toBe('wspólne dźwięki z następnym: 2');
+    next();
+    expect(nowDetail(container)).toBe('teraz pozycja zasadnicza, progi 5–4–3 → dalej G/B (progi 4–3–3)');
+    expect(count(container)).toBe('wspólne dźwięki z następnym: 1');
+  });
+
+  it('draws the whole Triad path dashed and the current Triad filled', () => {
+    const { container } = openChanges();
+    // Current G/B 4-3-3 on G-B-e: filled, R ringed, under it a filled path.
+    const cur = solidFilled(container);
+    expect(cur.map((d) => `${cell(d)} ${label(d)} ${fillOf(d)}`)).toEqual([
+      '2:4 3 var(--k0)', '1:3 5 var(--k0)', '0:3 R var(--k0)',
+    ]);
+    expect(cur.map((d) => d.querySelector('[data-role="ring"]') !== null)).toEqual([false, false, true]);
+    // B 4-4-2, C 5-5-3, Cm 5-4-3 dashed (cells under the current Triad stay filled).
+    expect(dashedDots(container).map(cell).sort()).toEqual(['0:2', '1:4', '1:5', '2:5']);
+    expect(dots(container)).toHaveLength(7);
+    const paths = triadPaths(container);
+    expect(paths.map((p) => p.getAttribute('stroke'))).toEqual(['var(--k1)', 'var(--k2)', 'var(--k3)', 'var(--k0)']);
+    const op = paths.map((p) => Number(p.getAttribute('opacity')));
+    expect(op.slice(0, 3).every((o) => o < op[3])).toBe(true);
+    // Next: B 4-4-2 is the filled one.
+    next();
+    expect(nowName(container)).toBe('2. 3 · B');
+    expect(solidFilled(container).map((d) => `${cell(d)} ${fillOf(d)}`)).toEqual([
+      '2:4 var(--k1)', '1:4 var(--k1)', '0:2 var(--k1)',
+    ]);
+    expect(triadPaths(container).at(-1)!.getAttribute('stroke')).toBe('var(--k1)');
+  });
+
+  it('splits a shared dashed cell into both colours', () => {
+    const { container } = openChanges();
+    // D# of B (2.) and E♭ of Cm (4.) on the B string, fret 4; C and Cm share G string fret 5.
+    expect(arcColors(dotAt(container, '1:4'))).toEqual(['var(--k1)', 'var(--k3)']);
+    expect(arcColors(dotAt(container, '2:5'))).toEqual(['var(--k2)', 'var(--k3)']);
+    // A cell of one Triad only keeps one dashed colour.
+    expect(arcColors(dotAt(container, '0:2'))).toEqual([]);
+    expect(dotAt(container, '0:2').querySelector('circle')!.getAttribute('stroke')).toBe('var(--k1)');
+  });
+
+  it('Next, Previous and arrows move along the path and wrap', () => {
+    openChanges();
+    next();
+    expect(currentTile()).toBe(1);
+    next();
+    next();
+    expect(currentTile()).toBe(3);
+    next();
+    expect(currentTile()).toBe(0);
+    prev();
+    expect(currentTile()).toBe(3);
+    fireEvent.keyDown(document.body, { key: 'ArrowRight' });
+    expect(currentTile()).toBe(0);
+    fireEvent.keyDown(document.body, { key: 'ArrowLeft' });
+    expect(currentTile()).toBe(3);
+    fireEvent.keyDown(document.body, { key: 'ArrowLeft' });
+    expect(currentTile()).toBe(2);
+    // The field and the chip rows keep their arrows.
+    fireEvent.keyDown(field(), { key: 'ArrowRight' });
+    expect(currentTile()).toBe(2);
+    fireEvent.keyDown(buttons('Struny')[0], { key: 'ArrowRight' });
+    expect(currentTile()).toBe(2);
+  });
+
+  it('other start moves the path one Triad up', () => {
+    const { container } = openChanges();
+    next();
+    otherStart();
+    expect(currentTile()).toBe(0);
+    expect(nowName(container)).toBe('1. 1 · G/D');
+    expect(nowDetail(container)).toBe('teraz 2. przewrót, progi 7–8–7 → dalej B/D# (progi 8–7–7)');
+    // Pressing it once per G Triad on G-B-e comes back to the first start.
+    const n = triads(7, 'major', STRING_SETS[3]).length;
+    for (let i = 1; i < n; i++) otherStart();
+    expect(nowName(container)).toBe('1. 1 · G/B');
+    expect(nowDetail(container)).toContain('progi 4–3–3');
+  });
+
+  it('clicking a tile selects that chord', () => {
+    const { container } = openChanges();
+    fireEvent.click(tiles()[2]);
+    expect(currentTile()).toBe(2);
+    expect(nowName(container)).toBe('3. 4 · C');
+    expect(solidFilled(container).map((d) => `${cell(d)} ${fillOf(d)}`)).toEqual([
+      '2:5 var(--k2)', '1:5 var(--k2)', '0:3 var(--k2)',
+    ]);
+  });
+
+  it('changing the String set recomputes the path', () => {
+    const { container } = openChanges();
+    otherStart();
+    next();
+    expect(nowDetail(container)).toContain('progi 8–7–7');
+    click('Struny', 'D-G-B');
+    expect(pressed('Struny')).toEqual(['D-G-B']);
+    // From start 0 on D-G-B: G/D 0-0-0 → B/F# 4-4-4.
+    expect(nowName(container)).toBe('2. 3 · B/F#');
+    expect(nowDetail(container)).toContain('progi 4–4–4');
+    expect(solidFilled(container).map(cell)).toEqual(['3:4', '2:4', '1:4']);
+    click('Struny', 'G-B-e');
+    expect(nowDetail(container)).toContain('progi 4–4–2');
+  });
+
+  it('typed names and Numbers translate live', () => {
+    const { container } = openChanges();
+    next();
+    typeProg('G C D G');
+    expect(text(line(container))).toBe('Numbery: 1 4 5 1 · tonacja rozpoznana: G-dur');
+    expect(pressed('Tonacja')).toEqual(['G']);
+    expect(currentTile()).toBe(0);
+    typeProg('C G Am F');
+    expect(text(line(container))).toBe('Numbery: 1 5 6- 4 · tonacja rozpoznana: C-dur');
+    expect(pressed('Tonacja')).toEqual(['C']);
+    expect(tileNames()).toBe('C G Am F');
+    // Typing leaves the song select.
+    expect(songSelect().value).toBe('');
+    click('Tonacja', 'A');
+    typeProg('1 5 6- 4');
+    expect(text(line(container))).toBe('Akordy w A-dur: A E F#m D');
+    expect(pressed('Tonacja')).toEqual(['A']);
+    expect(tileNames()).toBe('A E F#m D');
+    expect(tiles().map((b) => text(b.querySelector('.num')))).toEqual(['1', '5', '6-', '4']);
+    // A key chip moves the Numbers' chords.
+    click('Tonacja', 'D');
+    expect(field().value).toBe('1 5 6- 4');
+    expect(text(line(container))).toBe('Akordy w D-dur: D A Bm G');
+  });
+
+  it('a key change transposes typed names', () => {
+    const { container } = openChanges();
+    typeProg('G C D G');
+    click('Tonacja', 'D');
+    expect(field().value).toBe('D G A D');
+    expect(pressed('Tonacja')).toEqual(['D']);
+    expect(text(line(container))).toBe('Numbery: 1 4 5 1 · tonacja rozpoznana: D-dur');
+    expect(tileNames()).toBe('D G A D');
+    // Flat keys spell with flats, sevenths are kept.
+    typeProg('F#m7 Amaj7');
+    click('Tonacja', 'F');
+    expect(field().value).toBe('Dm7 Fmaj7');
+    click('Tonacja', 'B♭');
+    expect(field().value).toBe('Gm7 B♭maj7');
+    expect(pressed('Tonacja')).toEqual(['B♭']);
+  });
+
+  it('invalid input shows a message and keeps the last path', () => {
+    const { container } = openChanges();
+    const before = solidFilled(container).map(cell);
+    typeProg('G X');
+    expect(field().value).toBe('G X');
+    expect(line(container).classList.contains('err')).toBe(true);
+    expect(text(line(container))).toBe(
+      'Nie rozpoznaję: X. Wpisz Numbery (1 4 5 6-) albo nazwy akordów (G C D Em).',
+    );
+    // The board, tiles and bar keep the last valid progression.
+    expect(tileNames()).toBe('G B C Cm');
+    expect(solidFilled(container).map(cell)).toEqual(before);
+    expect(triadPaths(container)).toHaveLength(4);
+    next();
+    expect(currentTile()).toBe(1);
+    typeProg('Bdim 7°');
+    expect(text(line(container))).toBe('Tylko akordy dur i moll: Bdim, 7°.');
+    typeProg('  ');
+    expect(text(line(container))).toBe('Wpisz progresję.');
+    expect(tileNames()).toBe('G B C Cm');
+    expect(css).toMatch(/\.entry \.tr\.err\s*\{[^}]*color:\s*var\(--err\)/);
+    expect(css).toMatch(/\.triads\s*\{[^}]*--err:/);
+    typeProg('G C D G');
+    expect(line(container).classList.contains('err')).toBe(false);
+    expect(tileNames()).toBe('G C D G');
+  });
+
+  it('picking a song fills the field and key', () => {
+    const { container } = openChanges();
+    next();
+    fireEvent.change(songSelect(), { target: { value: 'time' } });
+    expect(field().value).toBe('F#m7 Amaj7');
+    expect(songSelect().value).toBe('time');
+    expect(pressed('Tonacja')).toEqual(['A']);
+    expect(text(line(container))).toBe('Numbery: 6- 1 · tonacja rozpoznana: A-dur');
+    expect(tileNames()).toBe('F#m A');
+    expect(currentTile()).toBe(0);
+    fireEvent.change(songSelect(), { target: { value: 'heyJude' } });
+    expect(field().value).toBe('F C C F B♭ F C F');
+    expect(pressed('Tonacja')).toEqual(['F']);
+    expect(tiles()).toHaveLength(8);
   });
 });
