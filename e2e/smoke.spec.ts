@@ -251,3 +251,65 @@ test('vertical board tap selects on a phone', async ({ browser }) => {
   expect(await page.evaluate(() => window.scrollX)).toBe(0);
   await context.close();
 });
+
+/** Bar `n` (1-based, numbered through the whole chart) of the Nashville chart. */
+const nashvilleBar = (page: Page, n: number) => page.locator('.chart .bar').nth(n - 1).locator('button.ch').first();
+
+test('nashville initial state', async ({ browser }) => {
+  const { context, page } = await open(browser, { locale: 'pl-PL', viewport: { width: 1280, height: 800 } });
+  await page.goto('/pl/nashville');
+  const keys = page.getByRole('group', { name: 'Tonacja', exact: true });
+  await expect(keys.getByRole('button', { name: 'A', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  const presets = page.getByRole('group', { name: 'Progresja', exact: true });
+  await expect(presets.getByRole('button', { name: 'Blues 12 taktów', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(nashvilleBar(page, 1)).toHaveAttribute('aria-pressed', 'true');
+  await expect(nashvilleBar(page, 2)).toHaveAttribute('aria-pressed', 'false');
+  await context.close();
+});
+
+test('nashville bar click shows the chord', async ({ browser }) => {
+  const { context, page } = await open(browser, { locale: 'pl-PL', viewport: { width: 1280, height: 800 } });
+  await page.goto('/pl/nashville');
+  const bar9 = nashvilleBar(page, 9);
+  await bar9.click();
+  await expect(bar9).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.chordline')).toContainText('E7');
+  await context.close();
+});
+
+test('nashville key change keeps numbers', async ({ browser }) => {
+  const { context, page } = await open(browser, { locale: 'pl-PL', viewport: { width: 1280, height: 800 } });
+  await page.goto('/pl/nashville');
+  await expect(nashvilleBar(page, 5).locator('.name')).toHaveText('D');
+  await page.getByRole('group', { name: 'Tonacja', exact: true }).getByRole('button', { name: 'F', exact: true }).click();
+  const bar5 = nashvilleBar(page, 5);
+  await expect(bar5.locator('.name')).toHaveText(/^B(♭|b)$/);
+  await expect(bar5.locator('.num')).toHaveText('4');
+  await context.close();
+});
+
+test('nashville position window', async ({ browser }) => {
+  const { context, page } = await open(browser, { locale: 'pl-PL', viewport: { width: 1280, height: 800 } });
+  await page.goto('/pl/nashville');
+  // Desktop landscape: only the horizontal board is shown.
+  await expect(page.locator('.board--h')).toBeVisible();
+  const dashed = page.locator('.board--h [data-role="outline"][stroke-dasharray]');
+  await expect(dashed).toHaveCount(0);
+
+  const toggle = page.locator('.position button.switch');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  await expect(dashed).toHaveCount(5);
+
+  await page.getByRole('group', { name: 'Kształt akordu 1' }).getByRole('button', { name: 'E', exact: true }).click();
+  await expect(dashed).toHaveCount(1);
+  await context.close();
+});
+
+test('nashville has no horizontal scroll on a phone', async ({ browser }) => {
+  const { context, page } = await open(browser, { locale: 'pl-PL', viewport: { width: 390, height: 844 } });
+  await page.goto('/pl/nashville');
+  await expect(page.locator('.board--v')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+  await context.close();
+});
