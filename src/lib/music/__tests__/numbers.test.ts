@@ -53,6 +53,10 @@ describe('numbers', () => {
     expect(() => parseChart('1 4_ 5 1')).toThrow();
   });
 
+  it('throws on a trailing empty line', () => {
+    expect(() => parseChart('1 1 1 1 |')).toThrow();
+  });
+
   it('labels numbers with explicit quality, seventh and bass', () => {
     const labels = (['6-', '57', '1/3', '7°', '1'] as const).map((src) => numberLabel(parseChart(src)[0][0][0]));
     expect(labels).toEqual(['6-', '5⁷', '1/3', '7°', '1']);
