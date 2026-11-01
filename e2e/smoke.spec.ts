@@ -9,7 +9,18 @@ async function open(browser: Browser, opts: BrowserContextOptions & { stored?: s
   if (stored) {
     await context.addInitScript(([key, value]) => localStorage.setItem(key, value), [LANG_KEY, stored] as const);
   }
-  return { context, page: await context.newPage() };
+  const page = await context.newPage();
+  // Islands render as static HTML first (`client:load`); a click before hydration is lost.
+  // Astro drops the `ssr` attribute once an island has hydrated, so every goto waits for that
+  // (except without JS, where islands never hydrate).
+  if (contextOptions.javaScriptEnabled === false) return { context, page };
+  const goto = page.goto.bind(page);
+  page.goto = async (...args) => {
+    const response = await goto(...args);
+    await expect(page.locator('astro-island[ssr]')).toHaveCount(0);
+    return response;
+  };
+  return { context, page };
 }
 
 test('stub redirects by browser language and stored choice', async ({ browser }) => {
