@@ -905,6 +905,24 @@ describe('TriadsExplorer — own progressions', () => {
     expect(tiles()).toHaveLength(4);
   });
 
+  it('with failing writes, saves and deletes keep this session\'s list', () => {
+    const setItem = vi.fn(() => {
+      throw new Error('denied');
+    });
+    vi.stubGlobal('localStorage', { getItem: vi.fn(() => null), setItem, removeItem: vi.fn(), clear: vi.fn(), key: vi.fn(), length: 0 });
+    openChanges();
+    typeProg('Em C G D');
+    saveAs('Moja');
+    typeProg('C G Am F');
+    saveAs('Druga');
+    expect(setItem).toHaveBeenCalledTimes(2);
+    expect(ownNames()).toEqual(['Moja', 'Druga']);
+    fireEvent.change(songSelect(), { target: { value: 'own:Moja' } });
+    expect(field().value).toBe('Em C G D');
+    fireEvent.click(button('Usuń')!);
+    expect(ownNames()).toEqual(['Druga']);
+  });
+
   it('Usuń removes the selected own progression', () => {
     localStorage.setItem(
       SAVED_KEY,

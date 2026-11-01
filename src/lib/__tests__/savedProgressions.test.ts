@@ -73,4 +73,23 @@ describe('savedProgressions', () => {
     expect(deleteProgression('Druga')).toEqual([]);
     expect(loadSaved()).toEqual([]);
   });
+
+  it('mutations build on the current list, so failing writes keep session changes', () => {
+    const setItem = vi.fn(() => {
+      throw new Error('denied');
+    });
+    vi.stubGlobal('localStorage', { getItem: vi.fn(() => null), setItem });
+    const a = { name: 'Moja', src: 'Em C G D', key: 7 };
+    const b = { name: 'Druga', src: 'C G Am F', key: 0 };
+    let list = saveProgression(a, []);
+    list = saveProgression(b, list);
+    expect(list).toEqual([a, b]);
+    const before = [...list];
+    const replaced = saveProgression({ ...a, src: 'Em C' }, list);
+    expect(replaced).toEqual([{ ...a, src: 'Em C' }, b]);
+    // The given list is not mutated.
+    expect(list).toEqual(before);
+    expect(deleteProgression('Moja', replaced)).toEqual([b]);
+    expect(setItem).toHaveBeenCalledTimes(4);
+  });
 });

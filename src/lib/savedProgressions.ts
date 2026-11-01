@@ -1,6 +1,7 @@
 /**
  * Own progressions saved by name in localStorage. Storage failures are ignored: reads fall back to
- * an empty list and writes still return the list the caller should show.
+ * an empty list and writes still return the list the caller should show. Mutations take the
+ * caller's current list, so the session keeps its changes while writes fail.
  */
 import type { PitchClass } from './music/notes';
 
@@ -48,9 +49,12 @@ function store(list: SavedProgression[]): SavedProgression[] {
   return list;
 }
 
-/** Save `p`; a same-named entry is replaced in place, otherwise `p` is appended. */
-export function saveProgression(p: SavedProgression): SavedProgression[] {
-  const list = loadSaved();
+/**
+ * Save `p` into `current` (default: the stored list); a same-named entry is replaced in place,
+ * otherwise `p` is appended. Pass the list on screen so a failed earlier write does not drop it.
+ */
+export function saveProgression(p: SavedProgression, current: readonly SavedProgression[] = loadSaved()): SavedProgression[] {
+  const list = [...current];
   const entry = { name: p.name, src: p.src, key: p.key };
   const at = list.findIndex((s) => s.name === p.name);
   if (at >= 0) list[at] = entry;
@@ -58,7 +62,7 @@ export function saveProgression(p: SavedProgression): SavedProgression[] {
   return store(list);
 }
 
-/** Remove the entry named `name` (no-op when absent). */
-export function deleteProgression(name: string): SavedProgression[] {
-  return store(loadSaved().filter((s) => s.name !== name));
+/** Remove the entry named `name` from `current` (default: the stored list); no-op when absent. */
+export function deleteProgression(name: string, current: readonly SavedProgression[] = loadSaved()): SavedProgression[] {
+  return store(current.filter((s) => s.name !== name));
 }

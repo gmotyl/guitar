@@ -285,14 +285,14 @@ export function TriadsExplorer({ t }: TriadsExplorerProps) {
     const saveOwn = () => {
       const name = saveName?.trim();
       if (!name || !parsed.ok) return;
-      setSaved(saveProgression({ name, src: ch.src, key: ch.key }));
+      setSaved(saveProgression({ name, src: ch.src, key: ch.key }, saved));
       setSaveName(null);
       patchCh({ preset: OWN + name });
     };
     const ownSelected = ch.preset?.startsWith(OWN) ? ch.preset.slice(OWN.length) : null;
     const removeOwn = () => {
       if (ownSelected == null) return;
-      setSaved(deleteProgression(ownSelected));
+      setSaved(deleteProgression(ownSelected, saved));
       patchCh({ preset: null });
     };
     const otherStart = () => {
