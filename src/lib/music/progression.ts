@@ -105,9 +105,17 @@ export function toNumber(chord: PathChord, key: PitchClass): string {
   return '?'; // unreachable: every semitone is a step or a flattened step
 }
 
-/** Chord symbol spelled like the major key, flats shown as ♭: 'F#m', 'B♭'. */
+/** Any flat key spells every pitch class with flats (F major is one). */
+const FLAT_SPELLING = majorKey(5);
+
+/**
+ * Chord symbol spelled like the major key, flats shown as ♭: 'F#m', 'B♭'. A root outside the
+ * scale is the flat of the next step, as in `toNumber` (b7 in C → 'B♭', b3 in E → 'G').
+ */
 export function chordLabel(chord: PathChord, key: PitchClass): string {
-  return noteName(chord.root, majorKey(key)).replace('b', '♭') + (chord.quality === 'minor' ? 'm' : '');
+  const outside = toNumber(chord, key).startsWith('b');
+  const name = noteName(chord.root, outside ? FLAT_SPELLING : majorKey(key));
+  return name.replace('b', '♭') + (chord.quality === 'minor' ? 'm' : '');
 }
 
 /** Typed chord names moved to the key `to` (sevenths kept); null when `src` is not all valid names. */

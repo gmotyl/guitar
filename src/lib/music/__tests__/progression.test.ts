@@ -34,6 +34,27 @@ describe('parseProgression', () => {
     expect(toNumber({ root: F, quality: 'major' }, G)).toBe('b7');
   });
 
+  it('chords outside the key are spelled as flats of the next step', () => {
+    // Key C: b2 b3 b6 b7 are D♭ E♭ A♭ B♭, never C# D# G# A#.
+    const c = parsed('b2 b3 b6 b7 b5', C);
+    expect(labels(c)).toBe('D♭ E♭ A♭ B♭ G♭');
+    expect(c.chords.map((x) => toNumber(x, C)).join(' ')).toBe('b2 b3 b6 b7 b5');
+    // G B♭ C is detected in G; B♭ (b3) stays flat.
+    const g = parsed('G B♭ C');
+    expect(g.key).toBe(G);
+    expect(labels(g)).toBe('G B♭ C');
+    // Sharp keys: b7 in D is C, b3 in E is G, b2 in A is B♭.
+    expect(chordLabel({ root: 0, quality: 'major' }, D)).toBe('C');
+    expect(chordLabel({ root: 7, quality: 'major' }, 4)).toBe('G');
+    expect(chordLabel({ root: 10, quality: 'minor' }, A)).toBe('B♭m');
+    // In-scale roots keep the key's spelling; Creep keeps B and Cm.
+    expect(labels(parsed('G B C Cm'))).toBe('G B C Cm');
+    expect(labels(parsed('1 3- 7', A))).toBe('A C#m G#');
+    // Transposition spells out-of-key chords the same way.
+    expect(transposeNames('C E♭ F', A)).toBe('A C D');
+    expect(transposeNames('G B♭ C', C)).toBe('C E♭ F');
+  });
+
   it('sevenths are read as their Triad', () => {
     const r = parsed('F#m7 Amaj7');
     expect(r.key).toBe(A);
