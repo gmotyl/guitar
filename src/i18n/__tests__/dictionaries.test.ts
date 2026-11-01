@@ -88,3 +88,48 @@ describe('dictionaries', () => {
     expect(en.legend.outside).toBe('chord tone outside the pentatonic');
   });
 });
+
+describe('nashville dictionaries', () => {
+  it('nashville dictionaries have the same keys', () => {
+    const pl = flatten(t('pl').nashville);
+    const en = flatten(t('en').nashville);
+    expect(Object.keys(en).sort()).toEqual(Object.keys(pl).sort());
+    for (const key of [
+      'title',
+      'subtitle',
+      'keyLabel',
+      'presetLabel',
+      'tableLabel',
+      'presets.blues',
+      'presets.pop',
+      'presets.twoFiveOne',
+      'presets.dooWop',
+      'presets.minor',
+      'keyLine',
+      'relativeMinor',
+      'legend.minor',
+      'legend.seventh',
+      'legend.bass',
+      'legend.split',
+      'legend.push',
+      'legend.hold',
+      'chordLine',
+      'positionSwitch',
+      'shapeWindow',
+      'barAria',
+      'tableAria',
+      'boardAria',
+    ]) {
+      expect(pl, key).toHaveProperty([key]);
+    }
+    expect(t('pl').nashville.title).toBe('System Nashville');
+    expect(t('en').nashville.title).toBe('The Nashville Number System');
+  });
+
+  it('english nashville copy has no Polish strings', () => {
+    const polish = /[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]|\b(tonacja|moll|takt|progi|kształt|gryf)/iu;
+    for (const [key, value] of Object.entries(flatten(t('en').nashville))) {
+      expect(polish.test(value as string), `en.nashville.${key}: ${value}`).toBe(false);
+    }
+  });
+});
