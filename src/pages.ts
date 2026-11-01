@@ -24,4 +24,12 @@ export const PAGES: readonly SitePage[] = [
       en: 'The five boxes of the minor and major pentatonic with the key chords on top.',
     },
   },
+  {
+    slug: 'nashville',
+    title: { pl: 'System Nashville', en: 'The Nashville Number System' },
+    blurb: {
+      pl: 'Akordy zapisane numerami stopni: zmień tonację, a numery zostają. Progresje z chartem i akordem na gryfie.',
+      en: 'Chords written as scale-step numbers: change the key and the numbers stay. Progressions as a chart with the chord on the fretboard.',
+    },
+  },
 ];
