@@ -575,6 +575,27 @@ describe('TriadsExplorer — Chord changes mode', () => {
     expect(tileNames()).toBe('G C D G');
   });
 
+  it('invalid or unchanged text keeps the current chord and start', () => {
+    const { container } = openChanges();
+    otherStart();
+    next();
+    const name = nowName(container);
+    const detail = nowDetail(container);
+    expect(currentTile()).toBe(1);
+    typeProg('G X');
+    expect(currentTile()).toBe(1);
+    expect(nowName(container)).toBe(name);
+    expect(nowDetail(container)).toBe(detail);
+    // Back to the same chords: still where we were.
+    typeProg('G B C Cm ');
+    expect(currentTile()).toBe(1);
+    expect(nowDetail(container)).toBe(detail);
+    // Other chords start over.
+    typeProg('G C D G');
+    expect(currentTile()).toBe(0);
+    expect(nowDetail(container)).toContain('progi 4–3–3');
+  });
+
   it('picking a song fills the field and key', () => {
     const { container } = openChanges();
     next();

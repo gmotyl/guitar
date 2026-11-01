@@ -96,6 +96,8 @@ const OVERLAY_R = 7.5;
 const OVERLAY_ROOT_OP = 0.35;
 const OVERLAY_ROOT_R = 9;
 const sameTriad = (a: Triad, b: Triad) => a.set.id === b.set.id && a.frets.every((f, i) => f === b.frets[i]);
+const sameChords = (a: readonly PathChord[], b: readonly PathChord[]) =>
+  a.length === b.length && a.every((c, i) => c.root === b[i].root && c.quality === b[i].quality);
 const keyName = (key: PitchClass) => spellNote(key, key);
 const setById = (id: StringSetId) => STRING_SETS.find((s) => s.id === id)!;
 
@@ -253,7 +255,15 @@ export function TriadsExplorer({ t }: TriadsExplorerProps) {
 
     const onInput = (value: string) => {
       const r = parseProgression(value, ch.key);
-      patchCh({ src: value, preset: null, idx: 0, start: 0, ...(r.ok && r.kind === 'names' ? { key: r.key } : {}) });
+      // The board keeps the last valid chords, so the chord and start reset only when the text
+      // parses to different chords (invalid intermediate text keeps the selection).
+      const changed = r.ok && !sameChords(r.chords, prog.chords);
+      patchCh({
+        src: value,
+        preset: null,
+        ...(changed ? { idx: 0, start: 0 } : {}),
+        ...(r.ok && r.kind === 'names' ? { key: r.key } : {}),
+      });
     };
     const pickKey = (key: PitchClass) => {
       // Typed names move from the current key to the picked one; both are explicit, since
