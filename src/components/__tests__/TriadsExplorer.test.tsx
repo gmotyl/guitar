@@ -508,6 +508,20 @@ describe('TriadsExplorer — Chord changes mode', () => {
     expect(pressed('Tonacja')).toEqual(['B♭']);
   });
 
+  it('successive key picks keep moving from the picked key', () => {
+    openChanges();
+    typeProg('Db C F');
+    expect(pressed('Tonacja')).toEqual(['C']);
+    click('Tonacja', 'G');
+    expect(field().value).toBe('A♭ G C');
+    expect(pressed('Tonacja')).toEqual(['G']);
+    // `A♭ G C` alone would detect as C; the move starts from the picked G.
+    click('Tonacja', 'D');
+    expect(field().value).toBe('E♭ D G');
+    expect(pressed('Tonacja')).toEqual(['D']);
+    expect(tileNames()).toBe('E♭ D G');
+  });
+
   it('chips, names and the key line share one spelling', () => {
     // The mockup rule: flats in the major keys D♭ E♭ F G♭ A♭ B♭ (no C♭ — G♭ major's 4 is B).
     const { container } = openChanges();

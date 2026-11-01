@@ -256,8 +256,9 @@ export function TriadsExplorer({ t }: TriadsExplorerProps) {
       patchCh({ src: value, preset: null, idx: 0, start: 0, ...(r.ok && r.kind === 'names' ? { key: r.key } : {}) });
     };
     const pickKey = (key: PitchClass) => {
-      // Typed names move to the picked key; the key is set explicitly (re-detecting could tie elsewhere).
-      const moved = transposeNames(ch.src, key);
+      // Typed names move from the current key to the picked one; both are explicit, since
+      // re-detecting either could tie elsewhere.
+      const moved = transposeNames(ch.src, key, ch.key);
       patchCh({ key, start: 0, ...(moved != null ? { src: moved } : {}) });
     };
     const pickSong = (id: string) => {

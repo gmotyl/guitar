@@ -141,4 +141,11 @@ describe('transposeNames', () => {
     expect(transposeNames('1 4 5 1', D)).toBeNull();
     expect(transposeNames('G X', D)).toBeNull();
   });
+
+  it('moves from the given key instead of re-detecting it', () => {
+    // `A♭ G C` re-detects as C (a tie with G), so without `from` it would move as if from C.
+    expect(transposeNames('A♭ G C', D, G)).toBe('E♭ D G');
+    expect(transposeNames('Db C F', G, C)).toBe('A♭ G C');
+    expect(transposeNames('G X', D, G)).toBeNull();
+  });
 });

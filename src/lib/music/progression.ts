@@ -119,11 +119,15 @@ export function chordLabel(chord: PathChord, key: PitchClass): string {
   return rootLabel(chord, key) + (chord.quality === 'minor' ? 'm' : '');
 }
 
-/** Typed chord names moved to the key `to` (sevenths kept); null when `src` is not all valid names. */
-export function transposeNames(src: string, to: PitchClass): string | null {
+/**
+ * Typed chord names moved to the key `to` (sevenths kept); null when `src` is not all valid names.
+ * `from` is the names' current key; without it the key is detected, which can tie elsewhere once
+ * the names have been moved (`A♭ G C` in G detects as C).
+ */
+export function transposeNames(src: string, to: PitchClass, from?: PitchClass): string | null {
   const r = readTokens(src, to);
   if (!r.ok || r.kind !== 'names') return null;
-  const from = detectKey(r.tokens.map((t) => t.chord));
+  from ??= detectKey(r.tokens.map((t) => t.chord));
   const shift = to - from;
   return r.tokens
     .map(({ chord, ext }) => chordLabel({ root: mod12(chord.root + shift), quality: chord.quality }, to) + ext)
