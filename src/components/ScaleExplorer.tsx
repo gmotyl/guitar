@@ -5,6 +5,7 @@ import { SHAPES } from '../lib/music/caged';
 import { chordName, keyChords, relativeKey, rootLabel, type Key, type Quality } from '../lib/music/keys';
 import { noteName, type PitchClass } from '../lib/music/notes';
 import { PENTATONIC, type Box, type Scale } from '../lib/music/scales';
+import { hitsAtFret, toggleGroup } from '../lib/selection';
 import { Fretboard } from './Fretboard';
 
 export interface ScaleExplorerProps {
@@ -20,6 +21,7 @@ const MAX_FRET = 15;
 const ROOTS: readonly PitchClass[] = Array.from({ length: 12 }, (_, pc) => pc);
 const QUALITIES: readonly Quality[] = ['minor', 'major'];
 const BOX_NUMBERS = [1, 2, 3, 4, 5] as const;
+type BoxN = (typeof BOX_NUMBERS)[number];
 /** CAGED shape held by box 1..5 (same order as `boxes()`). */
 const BOX_SHAPES = ['E', 'D', 'C', 'A', 'G'] as const;
 const cssVar = (name: string) => `var(${name})`;
@@ -29,12 +31,12 @@ export function ScaleExplorer({ t, scale: scaleId }: ScaleExplorerProps) {
   const scale = SCALES[scaleId];
   const [root, setRoot] = useState<PitchClass>(9);
   const [quality, setQualityState] = useState<Quality>('minor');
-  const [box, setBox] = useState<ExplorerState['box']>('all');
+  const [boxes, setBoxes] = useState<ExplorerState['boxes']>(new Set());
   const [chords, setChords] = useState<ReadonlySet<number>>(new Set());
 
   const key: Key = { root, quality };
   const keyLabel = (k: Key) => format(t.keyName, { note: noteName(k.root, k), quality: t.quality[k.quality] });
-  const board = buildBoard({ scale, key, box, chords });
+  const board = buildBoard({ scale, key, boxes, chords });
   const kc = keyChords(key);
   const picked = kc.filter((c) => chords.has(c.index));
 
@@ -48,6 +50,15 @@ export function ScaleExplorer({ t, scale: scaleId }: ScaleExplorerProps) {
     if (next.has(index)) next.delete(index);
     else next.add(index);
     setChords(next);
+  };
+  const toggleBoxes = (group: readonly BoxN[]) => setBoxes(toggleGroup(boxes, group, BOX_NUMBERS));
+  // A board click hits every Box whose fret range covers the column; +12 copies count too.
+  const ranges = board.boxes.map((b) => ({ id: b.n, from: b.from, to: b.to }));
+  const onFretClick = (fret: number) => toggleBoxes(hitsAtFret(ranges, fret));
+  // Band groups are `box-<n>`.
+  const onBandClick = (group: string) => {
+    const n = Number(group.replace('box-', ''));
+    if ((BOX_NUMBERS as readonly number[]).includes(n)) toggleBoxes([n as BoxN]);
   };
 
   const chip = (label: string, pressed: boolean | null, onClick: () => void, color?: string, cls?: string) => (
@@ -84,8 +95,8 @@ export function ScaleExplorer({ t, scale: scaleId }: ScaleExplorerProps) {
         </div>
         <div class="chips" role="group" aria-label={t.boxGroupAria}>
           <span class="lbl">{t.boxLabel}</span>
-          {chip(t.all, box === 'all', () => setBox('all'))}
-          {BOX_NUMBERS.map((n) => chip(String(n), box === n, () => setBox(n), shapeColor(BOX_SHAPES[n - 1])))}
+          {chip(t.all, boxes.size === 0, () => setBoxes(new Set()))}
+          {BOX_NUMBERS.map((n) => chip(String(n), boxes.has(n), () => toggleBoxes([n]), shapeColor(BOX_SHAPES[n - 1])))}
         </div>
         <div class="chips" role="group" aria-label={t.chordGroupAria}>
           <span class="lbl">{t.chordLabel}</span>
@@ -115,6 +126,8 @@ export function ScaleExplorer({ t, scale: scaleId }: ScaleExplorerProps) {
             dots={board.dots}
             bands={board.bands}
             outlines={board.outlines}
+            onFretClick={onFretClick}
+            onBandClick={onBandClick}
             ariaLabel={format(t.boardAria, { key: name, max: MAX_FRET })}
           />
         </div>

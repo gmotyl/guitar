@@ -8,7 +8,7 @@ const A_MINOR: Key = { root: 9, quality: 'minor' };
 const state = (over: Partial<ExplorerState> = {}): ExplorerState => ({
   scale: PENTATONIC,
   key: A_MINOR,
-  box: 'all',
+  boxes: new Set(),
   chords: new Set<number>(),
   ...over,
 });
@@ -65,12 +65,34 @@ describe('board', () => {
   });
 
   it('buildBoard: box filter dims other boxes and plain notes', () => {
-    const { dots, outlines, bands, boxes: bx } = buildBoard(state({ box: 3 }));
+    const { dots, outlines, bands, boxes: bx } = buildBoard(state({ boxes: new Set([3]) }));
     expect(outlines!.map((o) => !!o.dimmed)).toEqual(bx.map((b) => b.n !== 3));
     expect(bands.map((b) => !!b.dimmed)).toEqual(bx.map((b) => b.n !== 3));
     const inBox3 = new Set(bx.filter((b) => b.n === 3).flatMap((b) => b.cells.map((c) => `${c.string}:${c.fret}`)));
     expect(inBox3.size).toBe(12);
     for (const d of dots) expect(!!d.dimmed).toBe(!inBox3.has(`${d.string}:${d.fret}`));
+  });
+
+  it('buildBoard dims boxes outside a two-box selection', () => {
+    const { dots, outlines, bands, boxes: bx } = buildBoard(state({ boxes: new Set([1, 2]) }));
+    const sel = (n: number) => n === 1 || n === 2;
+    expect(outlines!.map((o) => !!o.dimmed)).toEqual(bx.map((b) => !sel(b.n)));
+    expect(bands.map((b) => !!b.dimmed)).toEqual(bx.map((b) => !sel(b.n)));
+    // Box 1 spans frets 5–8 and Box 2 frets 7–10: plain notes outside 5–10 are dimmed.
+    const inSel = new Set(bx.filter((b) => sel(b.n)).flatMap((b) => b.cells.map((c) => `${c.string}:${c.fret}`)));
+    for (const d of dots) expect(!!d.dimmed, `${d.string}:${d.fret}`).toBe(!inSel.has(`${d.string}:${d.fret}`));
+    expect(dots.filter((d) => d.fret < 5 || d.fret > 10).every((d) => d.dimmed)).toBe(true);
+    expect(at(dots, LOW_E, 5)!.dimmed).toBe(false);
+    expect(at(dots, LOW_E, 10)!.dimmed).toBe(false);
+  });
+
+  it('buildBoard keeps a copied box at full opacity on both ranges', () => {
+    const { dots, outlines, bands } = buildBoard(state({ boxes: new Set([4]) }));
+    expect(bands.filter((b) => !b.dimmed).map((b) => `${b.from}–${b.to}`)).toEqual(['0–3', '12–15']);
+    expect(outlines!.filter((o) => !o.dimmed).map((o) => o.group)).toEqual(['box-4', 'box-4']);
+    expect(at(dots, LOW_E, 0)!.dimmed).toBe(false);
+    expect(at(dots, LOW_E, 12)!.dimmed).toBe(false);
+    expect(at(dots, LOW_E, 5)!.dimmed).toBe(true);
   });
 
   it('buildBoard: shared chord tones carry several colours', () => {
@@ -117,7 +139,7 @@ describe('board', () => {
   });
 
   it('buildBoard: chord tones are never dimmed by the box filter', () => {
-    const { dots, boxes: bx } = buildBoard(state({ chords: new Set([EM]), box: 1 }));
+    const { dots, boxes: bx } = buildBoard(state({ chords: new Set([EM]), boxes: new Set([1]) }));
     const inBox1 = new Set(bx.filter((b) => b.n === 1).flatMap((b) => b.cells.map((c) => `${c.string}:${c.fret}`)));
     const em = dots.filter((d) => d.colors?.includes('var(--k3)'));
     expect(em.some((d) => !inBox1.has(`${d.string}:${d.fret}`))).toBe(true);

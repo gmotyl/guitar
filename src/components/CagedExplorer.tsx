@@ -3,6 +3,7 @@ import { format, type Dict, type Lang } from '../i18n';
 import { KEYS, SHAPES, chordTones, role, shapeSummary, voicings, type ShapeKey, type Voicing } from '../lib/music/caged';
 import type { Key, Quality } from '../lib/music/keys';
 import { TUNING, semitonesFromRoot, type PitchClass } from '../lib/music/notes';
+import { hitsAtFret, isShown, toggleGroup } from '../lib/selection';
 import { Fretboard, type FretBand, type FretDot } from './Fretboard';
 
 export interface CagedExplorerProps {
@@ -63,11 +64,19 @@ function buildChords(t: Dict['caged'], quality: Quality): Chord[] {
 
 export function CagedExplorer({ t }: CagedExplorerProps) {
   const [selKey, setSelKey] = useState<ShapeKey | null>(null);
-  const [selShape, setSelShape] = useState<ShapeKey | null>(null);
+  const [shapes, setShapes] = useState<ReadonlySet<ShapeKey>>(new Set());
   const [quality, setQuality] = useState<Quality>('major');
   const minor = quality === 'minor';
   const chords = buildChords(t, quality);
-  const dimmed = selShape ? SHAPE_KEYS.filter((k) => k !== selShape) : [];
+  const dimmed = SHAPE_KEYS.filter((k) => !isShown(shapes, k));
+  const toggleShapes = (group: readonly ShapeKey[]) => setShapes(toggleGroup(shapes, group, SHAPE_KEYS));
+  // A board click hits every shape whose band on that card covers the column; +12 copies count too.
+  const onFretClick = (c: Chord) => (fret: number) =>
+    toggleShapes(hitsAtFret(c.bands.map((b) => ({ id: b.group as ShapeKey, from: b.from, to: b.to })), fret));
+  // Band groups are shape keys.
+  const onBandClick = (group: string) => {
+    if ((SHAPE_KEYS as readonly string[]).includes(group)) toggleShapes([group as ShapeKey]);
+  };
   const shapeColor = Object.fromEntries(SHAPE_LIST.map((s) => [s.key, cssVar(s.color)])) as Record<ShapeKey, string>;
 
   const chip = (label: string, pressed: boolean, onClick: () => void, color?: string) => (
@@ -91,8 +100,8 @@ export function CagedExplorer({ t }: CagedExplorerProps) {
         </div>
         <div class="chips" role="group" aria-label={t.shapeGroupAria}>
           <span class="lbl">{t.shapeLabel}</span>
-          {chip(t.all, selShape === null, () => setSelShape(null))}
-          {SHAPE_LIST.map((s) => chip(s.key, selShape === s.key, () => setSelShape(s.key), cssVar(s.color)))}
+          {chip(t.all, shapes.size === 0, () => setShapes(new Set()))}
+          {SHAPE_LIST.map((s) => chip(s.key, shapes.has(s.key), () => toggleShapes([s.key]), cssVar(s.color)))}
         </div>
         <div class="chips" role="group" aria-label={t.quality.groupAria}>
           <span class="lbl">{t.quality.label}</span>
@@ -134,6 +143,8 @@ export function CagedExplorer({ t }: CagedExplorerProps) {
                 dots={c.dots}
                 bands={c.bands}
                 dimmedGroups={dimmed}
+                onFretClick={onFretClick(c)}
+                onBandClick={onBandClick}
                 ariaLabel={format(minor ? t.boardAriaMinor : t.boardAria, { key: c.key, max: MAX_FRET })}
               />
             </div>
@@ -145,7 +156,7 @@ export function CagedExplorer({ t }: CagedExplorerProps) {
                 <div
                   class="shape-card n"
                   data-shape={v.shape}
-                  style={{ '--sc': shapeColor[v.shape], opacity: selShape && selShape !== v.shape ? DIM : '1' }}
+                  style={{ '--sc': shapeColor[v.shape], opacity: isShown(shapes, v.shape) ? '1' : DIM }}
                 >
                   <h4>
                     {v.shape} · {format(t.tileFrets, { from: s.lo, to: s.hi })}

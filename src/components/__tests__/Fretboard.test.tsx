@@ -1,7 +1,9 @@
-import { describe, expect, it } from 'vitest';
-import { render } from '@testing-library/preact';
+import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render } from '@testing-library/preact';
 import { Fretboard, type FretDot, type FretBand } from '../Fretboard';
 import { boxes } from '../../lib/music/scales';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 const num = (el: Element, attr: string) => Number(el.getAttribute(attr));
 const all = (c: Element, role: string) => Array.from(c.querySelectorAll(`[data-role="${role}"]`));
@@ -486,4 +488,172 @@ describe('Fretboard outline clearance', () => {
       });
     }
   }
+});
+
+describe('Fretboard click areas', () => {
+  const column = (c: Element, fret: number) => c.querySelector(`[data-role="fret-column"][data-fret="${fret}"]`)!;
+  const fret7: FretDot[] = [{ string: 2, fret: 7, label: 'R', color: 'var(--c)', variant: 'filled', group: 'C' }];
+
+  /** The column rect contains the dot centre and spans every string, and the dot lets the click through. */
+  const expectColumnUnderDot = (c: Element, h: boolean) => {
+    const col = column(c, 7);
+    const [x, y, w, hgt] = ['x', 'y', 'width', 'height'].map((a) => num(col, a));
+    const dot = all(c, 'dot')[0];
+    const circle = dot.querySelector('circle')!;
+    const [cx, cy] = [num(circle, 'cx'), num(circle, 'cy')];
+    expect(cx).toBeGreaterThan(x);
+    expect(cx).toBeLessThan(x + w);
+    expect(cy).toBeGreaterThan(y);
+    expect(cy).toBeLessThan(y + hgt);
+    const strings = all(c, 'string');
+    for (const s of strings) {
+      const across = h ? num(s, 'y1') : num(s, 'x1');
+      const [lo, hi] = h ? [y, y + hgt] : [x, x + w];
+      expect(across).toBeGreaterThan(lo);
+      expect(across).toBeLessThan(hi);
+    }
+    expect(dot.getAttribute('pointer-events')).toBe('none');
+  };
+
+  it('calls onFretClick with the clicked fret', () => {
+    const onFretClick = vi.fn();
+    const { container } = render(
+      <Fretboard orientation="horizontal" dots={fret7} ariaLabel="b" onFretClick={onFretClick} />,
+    );
+    expect(all(container, 'fret-column').map((r) => r.getAttribute('data-fret'))).toEqual(
+      Array.from({ length: 16 }, (_, i) => String(i)),
+    );
+    expectColumnUnderDot(container, true);
+    fireEvent.click(column(container, 7));
+    expect(onFretClick).toHaveBeenCalledTimes(1);
+    expect(onFretClick).toHaveBeenCalledWith(7);
+  });
+
+  it('calls onFretClick in the vertical orientation', () => {
+    const onFretClick = vi.fn();
+    const { container } = render(
+      <Fretboard orientation="vertical" dots={fret7} ariaLabel="b" onFretClick={onFretClick} />,
+    );
+    expectColumnUnderDot(container, false);
+    fireEvent.click(column(container, 7));
+    expect(onFretClick).toHaveBeenCalledTimes(1);
+    expect(onFretClick).toHaveBeenCalledWith(7);
+    fireEvent.click(column(container, 0));
+    expect(onFretClick).toHaveBeenLastCalledWith(0);
+  });
+
+  it('band click calls onBandClick only', () => {
+    const onFretClick = vi.fn();
+    const onBandClick = vi.fn();
+    const { container } = render(
+      <Fretboard
+        orientation="horizontal"
+        dots={dots}
+        bands={[{ from: 1, to: 4, color: 'var(--d)', label: '2 · D', group: 'D' }]}
+        ariaLabel="b"
+        onFretClick={onFretClick}
+        onBandClick={onBandClick}
+      />,
+    );
+    const band = all(container, 'band')[0];
+    expect(band.getAttribute('style')).toContain('cursor: pointer');
+    fireEvent.click(band.querySelector('text')!);
+    expect(onBandClick).toHaveBeenCalledTimes(1);
+    expect(onBandClick).toHaveBeenCalledWith('D');
+    expect(onFretClick).not.toHaveBeenCalled();
+  });
+
+  it('click areas are hidden from assistive tech', () => {
+    for (const orientation of ['horizontal', 'vertical'] as const) {
+      const { container } = render(
+        <Fretboard orientation={orientation} dots={dots} bands={bands} ariaLabel="b" onFretClick={() => {}} onBandClick={() => {}} />,
+      );
+      const cols = all(container, 'fret-column');
+      expect(cols).toHaveLength(16);
+      for (const col of cols) {
+        expect(col.getAttribute('aria-hidden')).toBe('true');
+        expect(col.hasAttribute('tabindex')).toBe(false);
+        expect(col.getAttribute('style')).toContain('cursor: pointer');
+      }
+      for (const band of all(container, 'band')) expect(band.hasAttribute('tabindex')).toBe(false);
+    }
+    // Light highlight of the column under the pointer.
+    const tokensCss = readFileSync(join(process.cwd(), 'src/styles/tokens.css'), 'utf8');
+    expect(tokensCss).toMatch(/\[data-role="fret-column"\]:hover\s*\{[^}]*fill:/);
+  });
+
+  it('renders no click areas without handlers', () => {
+    const { container } = render(<Fretboard orientation="horizontal" dots={dots} bands={bands} ariaLabel="b" />);
+    expect(all(container, 'fret-column')).toHaveLength(0);
+    expect(container.querySelector('[pointer-events]')).toBeNull();
+    expect(container.querySelector('[style*="cursor"]')).toBeNull();
+  });
+});
+
+describe('Fretboard outline pass-through and open-string column', () => {
+  const am = boxes({ root: 9, quality: 'minor' }, 15);
+  const outlines = am.map((b) => ({ group: `box-${b.n}`, color: 'var(--c)', cells: b.cells }));
+  const boxDots: FretDot[] = am.flatMap((b) =>
+    b.cells.map((c) => ({ ...c, label: '', color: 'var(--c)', variant: 'outline' as const, group: `box-${b.n}` })),
+  );
+
+  it('outline polygons let the pointer through only when onFretClick is given', () => {
+    for (const orientation of ['horizontal', 'vertical'] as const) {
+      const clickable = render(
+        <Fretboard orientation={orientation} dots={boxDots} outlines={outlines} ariaLabel="b" onFretClick={() => {}} />,
+      );
+      const polys = all(clickable.container, 'outline');
+      expect(polys.length).toBeGreaterThan(0);
+      for (const p of polys) expect(p.getAttribute('pointer-events')).toBe('none');
+      clickable.unmount();
+
+      const plain = render(<Fretboard orientation={orientation} dots={boxDots} outlines={outlines} ariaLabel="b" />);
+      const plainPolys = all(plain.container, 'outline');
+      expect(plainPolys.length).toBeGreaterThan(0);
+      for (const p of plainPolys) expect(p.hasAttribute('pointer-events')).toBe(false);
+      plain.unmount();
+    }
+  });
+
+  it('the fret-0 column spans from the board edge to the nut around the open-string dot', () => {
+    const open: FretDot[] = [{ string: 3, fret: 0, label: 'D', color: 'var(--c)', variant: 'filled', group: 'C' }];
+    for (const orientation of ['horizontal', 'vertical'] as const) {
+      const h = orientation === 'horizontal';
+      const { container, unmount } = render(
+        <Fretboard orientation={orientation} dots={open} ariaLabel="b" onFretClick={() => {}} />,
+      );
+      const col = container.querySelector('[data-role="fret-column"][data-fret="0"]')!;
+      const [lo, len] = h ? [num(col, 'x'), num(col, 'width')] : [num(col, 'y'), num(col, 'height')];
+      const circle = all(container, 'dot')[0].querySelector('circle')!;
+      const centre = num(circle, h ? 'cx' : 'cy');
+      const nut = all(container, 'nut')[0];
+      const nutAt = num(nut, h ? 'x1' : 'y1');
+      // Ends at the nut, starts before the open dot, and the dot (cellAt(0)) sits in its middle.
+      expect(lo + len).toBe(nutAt);
+      expect(lo).toBeLessThan(centre);
+      expect(centre).toBeLessThan(nutAt);
+      expect(lo + len / 2).toBeCloseTo(centre);
+      // Spans every string across the board.
+      const [aLo, aLen] = h ? [num(col, 'y'), num(col, 'height')] : [num(col, 'x'), num(col, 'width')];
+      for (const s of all(container, 'string')) {
+        const across = num(s, h ? 'y1' : 'x1');
+        expect(across).toBeGreaterThan(aLo);
+        expect(across).toBeLessThan(aLo + aLen);
+      }
+      unmount();
+    }
+  });
+
+  it('pentatonic-style board with outlines renders stably', () => {
+    const bands: FretBand[] = am
+      .filter((b) => !b.copy)
+      .map((b) => ({ from: b.from, to: b.to, color: 'var(--c)', label: String(b.n), group: `box-${b.n}` }));
+    for (const orientation of ['horizontal', 'vertical'] as const) {
+      const { container, unmount } = render(
+        <Fretboard orientation={orientation} dots={boxDots} bands={bands} outlines={outlines} ariaLabel="A minor pentatonic" />,
+      );
+      expect(container.innerHTML).toMatchSnapshot(`pentatonic ${orientation}`);
+      unmount();
+    }
+  });
 });
