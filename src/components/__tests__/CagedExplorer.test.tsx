@@ -298,6 +298,15 @@ describe('CagedExplorer', () => {
     expect(pressed(shapeGroup())).toEqual(['C', 'A']);
   });
 
+  it('clicking a +12 copy toggles its shape', () => {
+    const { container } = renderExplorer();
+    // C major card: fret 15 is covered only by the C +12 copy (12–15).
+    fireEvent.click(fretColumn(container, 'C', 15));
+    expect(pressed(shapeGroup())).toEqual(['C']);
+    fireEvent.click(fretColumn(container, 'C', 15));
+    expect(pressed(shapeGroup())).toEqual(['wszystkie']);
+  });
+
   it('five shapes collapse to all', () => {
     renderExplorer();
     for (const s of ['C', 'A', 'G', 'E']) fireEvent.click(chip(shapeGroup(), s));

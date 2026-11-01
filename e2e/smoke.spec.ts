@@ -202,9 +202,15 @@ test('pentatonic overlap click toggles two boxes', async ({ browser }) => {
   const b = (await dot.boundingBox())!;
   const covered = await page.evaluate(([x, y]) => {
     const outlines = [...document.querySelectorAll<SVGElement>('.board--h [data-role="outline"]')];
+    const saved = outlines.map((o) => o.getAttribute('pointer-events'));
     outlines.forEach((o) => o.setAttribute('pointer-events', 'auto'));
     const hit = document.elementFromPoint(x, y);
-    outlines.forEach((o) => o.setAttribute('pointer-events', 'none'));
+    // Restore exactly what was there, so a missing pass-through is not masked.
+    outlines.forEach((o, i) => {
+      const v = saved[i];
+      if (v === null) o.removeAttribute('pointer-events');
+      else o.setAttribute('pointer-events', v);
+    });
     return hit?.getAttribute('data-role') ?? null;
   }, [b.x + b.width / 2, b.y + b.height / 2] as const);
   expect(covered).toBe('outline');
@@ -238,7 +244,9 @@ test('vertical board tap selects on a phone', async ({ browser }) => {
 
   const boxes = page.getByRole('group', { name: 'Pudełko' });
   await expect(boxes.getByRole('button', { name: 'wszystkie', exact: true })).toHaveAttribute('aria-pressed', 'false');
-  await expect(boxes.getByRole('button', { name: '1', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  // Fret 7 in A minor is covered by Box 1 (5–8) and Box 2 (7–10).
+  for (const n of ['1', '2']) await expect(boxes.getByRole('button', { name: n, exact: true })).toHaveAttribute('aria-pressed', 'true');
+  for (const n of ['3', '4', '5']) await expect(boxes.getByRole('button', { name: n, exact: true })).toHaveAttribute('aria-pressed', 'false');
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   expect(await page.evaluate(() => window.scrollX)).toBe(0);
   await context.close();

@@ -213,6 +213,12 @@ describe('ScaleExplorer', () => {
     expect(box4.map((b) => text(b.querySelector('text')))).toEqual(['4 · A', '4 · A']);
     for (const b of box4) expect(opacity(b)).toBe(1);
     for (const o of hBoard(container).querySelectorAll('[data-role="outline"][data-group="box-4"]')) expect(opacity(o)).toBe(1);
+    // The +12 copy (12–15) selects the same box from an empty selection. Fret 14 is
+    // covered by that copy alone (Box 3 ends at 13; Box 5's copy would need fret 17).
+    fireEvent.click(fretColumn(container, 1));
+    expect(pressed(BOX)).toEqual(['wszystkie']);
+    fireEvent.click(fretColumn(container, 14));
+    expect(pressed(BOX)).toEqual(['4']);
   });
 
   it('five boxes collapse to all', () => {
