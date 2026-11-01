@@ -1,4 +1,4 @@
-import { expect, test, type Browser, type BrowserContextOptions } from '@playwright/test';
+import { expect, test, type Browser, type BrowserContextOptions, type Locator, type Page } from '@playwright/test';
 
 const LANG_KEY = 'guitar.lang';
 
@@ -163,5 +163,83 @@ test('pentatonic: works without JS', async ({ browser }) => {
   const board = page.locator('.board--h').first();
   await expect(board).toBeVisible();
   await expect(board.locator('[data-role="dot"]').first()).toBeVisible();
+  await context.close();
+});
+
+/** Real mouse click at the centre of `dot` — dots let the pointer through to their fret column. */
+async function clickCentre(page: Page, dot: Locator) {
+  await dot.scrollIntoViewIfNeeded();
+  const box = await dot.boundingBox();
+  if (!box) throw new Error('dot has no bounding box');
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+}
+
+test('caged overlap click selects both shapes', async ({ browser }) => {
+  const { context, page } = await open(browser, { locale: 'pl-PL', viewport: { width: 1280, height: 800 } });
+  await page.goto('/pl/caged');
+  const card = page.locator('section.card[data-key="C"]');
+  // Fret 3 of the C card sits where the C and A shape bands overlap.
+  await clickCentre(page, card.locator('.board--h [data-role="dot"][data-fret="3"]').first());
+
+  const shapes = page.getByRole('group', { name: 'Kształt' });
+  for (const s of ['C', 'A']) await expect(shapes.getByRole('button', { name: s, exact: true })).toHaveAttribute('aria-pressed', 'true');
+  for (const s of ['G', 'E', 'D']) await expect(shapes.getByRole('button', { name: s, exact: true })).toHaveAttribute('aria-pressed', 'false');
+  await expect(shapes.getByRole('button', { name: 'wszystkie', exact: true })).toHaveAttribute('aria-pressed', 'false');
+  await context.close();
+});
+
+test('pentatonic overlap click toggles two boxes', async ({ browser }) => {
+  const { context, page } = await open(browser, { locale: 'pl-PL', viewport: { width: 1280, height: 800 } });
+  await page.goto('/pl/pentatonic');
+  // A minor: Box 1 (frets 5–8) and Box 2 (7–10) overlap at fret 7. Clicking a dot inside
+  // their outlines exercises pass-through of both the outline and the dot.
+  const dot = page.locator('.board--h [data-role="dot"][data-fret="7"]').first();
+  const boxes = page.getByRole('group', { name: 'Pudełko' });
+  const chip = (name: string) => boxes.getByRole('button', { name, exact: true });
+
+  // Precondition: an outline covers the dot's centre (it would capture the click without pass-through).
+  await dot.scrollIntoViewIfNeeded();
+  const b = (await dot.boundingBox())!;
+  const covered = await page.evaluate(([x, y]) => {
+    const outlines = [...document.querySelectorAll<SVGElement>('.board--h [data-role="outline"]')];
+    outlines.forEach((o) => o.setAttribute('pointer-events', 'auto'));
+    const hit = document.elementFromPoint(x, y);
+    outlines.forEach((o) => o.setAttribute('pointer-events', 'none'));
+    return hit?.getAttribute('data-role') ?? null;
+  }, [b.x + b.width / 2, b.y + b.height / 2] as const);
+  expect(covered).toBe('outline');
+
+  await clickCentre(page, dot);
+  for (const n of ['1', '2']) await expect(chip(n)).toHaveAttribute('aria-pressed', 'true');
+  for (const n of ['3', '4', '5']) await expect(chip(n)).toHaveAttribute('aria-pressed', 'false');
+  await expect(chip('wszystkie')).toHaveAttribute('aria-pressed', 'false');
+
+  await clickCentre(page, dot);
+  await expect(chip('wszystkie')).toHaveAttribute('aria-pressed', 'true');
+  for (const n of ['1', '2']) await expect(chip(n)).toHaveAttribute('aria-pressed', 'false');
+  await context.close();
+});
+
+test('vertical board tap selects on a phone', async ({ browser }) => {
+  const { context, page } = await open(browser, {
+    locale: 'pl-PL',
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+    isMobile: true,
+  });
+  await page.goto('/pl/pentatonic');
+  const board = page.locator('.board--v').first();
+  await expect(board).toBeVisible();
+  const dot = board.locator('[data-role="dot"][data-fret="7"]').first();
+  await dot.scrollIntoViewIfNeeded();
+  const box = await dot.boundingBox();
+  if (!box) throw new Error('dot has no bounding box');
+  await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
+
+  const boxes = page.getByRole('group', { name: 'Pudełko' });
+  await expect(boxes.getByRole('button', { name: 'wszystkie', exact: true })).toHaveAttribute('aria-pressed', 'false');
+  await expect(boxes.getByRole('button', { name: '1', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  expect(await page.evaluate(() => window.scrollX)).toBe(0);
   await context.close();
 });
