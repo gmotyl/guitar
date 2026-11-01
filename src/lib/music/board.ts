@@ -2,13 +2,15 @@ import type { FretBand, FretDot, FretboardProps } from '../../components/Fretboa
 import { SHAPES, role } from './caged';
 import { keyChords, type Key } from './keys';
 import { TUNING, semitonesFromRoot } from './notes';
+import { isShown } from '../selection';
 import { boxes, type Box, type Scale } from './scales';
 
 /** State of the scale explorer island; `chords` holds `KeyChord.index` values. */
 export interface ExplorerState {
   scale: Scale;
   key: Key;
-  box: 'all' | 1 | 2 | 3 | 4 | 5;
+  /** Shape selection of Boxes; empty means all. */
+  boxes: ReadonlySet<1 | 2 | 3 | 4 | 5>;
   chords: ReadonlySet<number>;
 }
 
@@ -21,8 +23,8 @@ const cellKey = (string: number, fret: number) => `${string}:${fret}`;
 /**
  * Board data for <Fretboard>: degree-labelled scale dots (root ringed), one outline
  * and band per box placement, and the selected chords' tones labelled by role in
- * their chord colours. The box filter dims other boxes and plain scale dots outside
- * the picked box, never chord tones.
+ * their chord colours. The Box selection dims unselected boxes and plain scale dots
+ * outside the union of selected boxes, never chord tones.
  */
 export function buildBoard(s: ExplorerState): {
   dots: FretDot[];
@@ -30,9 +32,9 @@ export function buildBoard(s: ExplorerState): {
   bands: FretBand[];
   boxes: Box[];
 } {
-  const { scale, key, box } = s;
+  const { scale, key } = s;
   const bx = boxes(key, MAX_FRET);
-  const shown = (b: Box) => box === 'all' || b.n === box;
+  const shown = (b: Box) => isShown(s.boxes, b.n);
   const inBox = new Set(bx.filter(shown).flatMap((b) => b.cells.map((c) => cellKey(c.string, c.fret))));
 
   const outlines = bx.map((b) => ({
@@ -70,7 +72,7 @@ export function buildBoard(s: ExplorerState): {
           color: 'var(--muted)',
           variant: 'outline',
           ring: r === 0,
-          dimmed: box !== 'all' && !inBox.has(cellKey(string, fret)),
+          dimmed: s.boxes.size > 0 && !inBox.has(cellKey(string, fret)),
         });
         continue;
       }

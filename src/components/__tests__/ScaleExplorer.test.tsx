@@ -17,6 +17,8 @@ const pressed = (name: string) =>
 const hBoard = (c: Element) => c.querySelector<SVGSVGElement>('.board--h svg')!;
 const dotAt = (svg: Element, string: number, fret: number) =>
   svg.querySelector(`[data-role="dot"][data-string="${string}"][data-fret="${fret}"]`);
+const fretColumn = (c: Element, fret: number) =>
+  hBoard(c).querySelector(`[data-role="fret-column"][data-fret="${fret}"]`)!;
 const opacity = (el: Element | null) => Number(el?.getAttribute('opacity') ?? '1');
 const legend = (c: Element) => Array.from(c.querySelectorAll('.legend > span')).map(text);
 
@@ -164,6 +166,83 @@ describe('ScaleExplorer', () => {
     // Em tones outside box 1 stay full: B on the A string, fret 2 (dashed, outside the pentatonic).
     expect(opacity(dotAt(svg, 4, 2))).toBe(1);
     expect(opacity(dotAt(svg, 5, 12))).toBe(1);
+  });
+
+  it('initial state presses all and no box', () => {
+    const { container } = renderExplorer();
+    expect(pressed(BOX)).toEqual(['wszystkie']);
+    expect(pressed(CHORDS)).toEqual([]);
+    for (const o of hBoard(container).querySelectorAll('[data-role="outline"], [data-role="band"]')) expect(opacity(o)).toBe(1);
+  });
+
+  it('box chips select several boxes', () => {
+    const { container } = renderExplorer();
+    click(BOX, '1');
+    click(BOX, '2');
+    expect(pressed(BOX)).toEqual(['1', '2']);
+    const svg = hBoard(container);
+    for (const o of svg.querySelectorAll('[data-role="outline"], [data-role="band"]')) {
+      const g = o.getAttribute('data-group');
+      expect(opacity(o), g!).toBe(g === 'box-1' || g === 'box-2' ? 1 : 0.12);
+    }
+    // Boxes 1 and 2 cover frets 5–10.
+    expect(opacity(dotAt(svg, 4, 0))).toBe(0.15);
+    expect(opacity(dotAt(svg, 5, 12))).toBe(0.15);
+    expect(opacity(dotAt(svg, 4, 5))).toBe(1);
+    expect(opacity(dotAt(svg, 5, 10))).toBe(1);
+    // A chip press toggles: Box 1 off again leaves Box 2.
+    click(BOX, '1');
+    expect(pressed(BOX)).toEqual(['2']);
+    click(BOX, 'wszystkie');
+    expect(pressed(BOX)).toEqual(['wszystkie']);
+  });
+
+  it('clicking where two boxes meet toggles both', () => {
+    const { container } = renderExplorer();
+    fireEvent.click(fretColumn(container, 7));
+    expect(pressed(BOX)).toEqual(['1', '2']);
+    fireEvent.click(fretColumn(container, 7));
+    expect(pressed(BOX)).toEqual(['wszystkie']);
+  });
+
+  it('clicking a copied box selects it', () => {
+    const { container } = renderExplorer();
+    fireEvent.click(fretColumn(container, 1));
+    expect(pressed(BOX)).toEqual(['4']);
+    const box4 = Array.from(hBoard(container).querySelectorAll('[data-role="band"][data-group="box-4"]'));
+    expect(box4.map((b) => text(b.querySelector('text')))).toEqual(['4 · A', '4 · A']);
+    for (const b of box4) expect(opacity(b)).toBe(1);
+    for (const o of hBoard(container).querySelectorAll('[data-role="outline"][data-group="box-4"]')) expect(opacity(o)).toBe(1);
+  });
+
+  it('five boxes collapse to all', () => {
+    renderExplorer();
+    for (const n of ['1', '2', '3', '4']) click(BOX, n);
+    expect(pressed(BOX)).toEqual(['1', '2', '3', '4']);
+    click(BOX, '5');
+    expect(pressed(BOX)).toEqual(['wszystkie']);
+  });
+
+  it('chord tones stay visible under the box selection', () => {
+    const { container } = renderExplorer();
+    click(CHORDS, 'v · Em');
+    fireEvent.click(fretColumn(container, 5)); // Box 1 (5–8) and Box 5 (2–5)
+    click(BOX, '5');
+    expect(pressed(BOX)).toEqual(['1']);
+    const svg = hBoard(container);
+    expect(opacity(dotAt(svg, 4, 2))).toBe(1); // B, an Em tone outside Box 1
+    expect(opacity(dotAt(svg, 5, 12))).toBe(1); // E, an Em root outside Box 1
+    expect(opacity(dotAt(svg, 4, 0))).toBe(0.15); // open A, plain scale note outside Box 1
+  });
+
+  it('band click toggles one box', () => {
+    const { container } = renderExplorer();
+    const band = (label: string) =>
+      Array.from(hBoard(container).querySelectorAll('[data-role="band"]')).find((b) => text(b.querySelector('text')) === label)!;
+    fireEvent.click(band('2 · D').querySelector('text')!);
+    expect(pressed(BOX)).toEqual(['2']);
+    fireEvent.click(band('2 · D').querySelector('text')!);
+    expect(pressed(BOX)).toEqual(['wszystkie']);
   });
 
   it('ScaleExplorer: chord overlay split and dashed dots', () => {
