@@ -12,6 +12,21 @@ const qualityGroup = () => screen.getByRole('group', { name: 'Tryb akordu' });
 const chip = (group: HTMLElement, name: string) => within(group).getByRole('button', { name });
 const opacityOf = (el: Element) =>
   el instanceof HTMLElement ? el.style.opacity || '1' : el.getAttribute('opacity') ?? '1';
+const pressed = (group: HTMLElement) =>
+  within(group)
+    .getAllByRole('button')
+    .filter((b) => b.getAttribute('aria-pressed') === 'true')
+    .map((b) => b.textContent);
+const card = (c: Element, key: string) => c.querySelector<HTMLElement>(`section.card[data-key="${key}"]`)!;
+const fretColumn = (c: Element, key: string, fret: number) =>
+  card(c, key).querySelector(`.board--h svg [data-role="fret-column"][data-fret="${fret}"]`)!;
+const groupOf = (n: Element) => n.getAttribute('data-group') ?? (n as HTMLElement).dataset.shape;
+/** Every band, dot and tile on every card is full opacity iff its shape is in `shown`. */
+const expectShown = (c: Element, shown: readonly string[]) => {
+  const nodes = Array.from(c.querySelectorAll('[data-role="band"], [data-role="dot"], .shape-card'));
+  expect(nodes.length).toBeGreaterThan(50);
+  for (const n of nodes) expect(opacityOf(n)).toBe(shown.includes(groupOf(n)!) ? '1' : '0.12');
+};
 
 describe('CagedExplorer', () => {
   afterEach(cleanup);
@@ -245,5 +260,82 @@ describe('CagedExplorer', () => {
     const groupOf = (n: Element) => n.getAttribute('data-group') ?? (n as HTMLElement).dataset.shape;
     expect(nodes.some((n) => groupOf(n) === 'E')).toBe(true);
     for (const n of nodes) expect(opacityOf(n)).toBe(groupOf(n) === 'E' ? '1' : '0.12');
+  });
+
+  it('shape chips select several shapes', () => {
+    const { container } = renderExplorer();
+    fireEvent.click(chip(shapeGroup(), 'E'));
+    fireEvent.click(chip(shapeGroup(), 'D'));
+    expect(pressed(shapeGroup())).toEqual(['E', 'D']);
+    expectShown(container, ['E', 'D']);
+  });
+
+  it('clicking where two shapes meet toggles both on every card', () => {
+    const { container } = renderExplorer();
+    // C card: shape C covers frets 0–3, shape A 3–5.
+    fireEvent.click(fretColumn(container, 'C', 3));
+    expect(pressed(shapeGroup())).toEqual(['C', 'A']);
+    expectShown(container, ['C', 'A']);
+    fireEvent.click(fretColumn(container, 'C', 3));
+    expect(pressed(shapeGroup())).toEqual(['wszystkie']);
+    expectShown(container, ['C', 'A', 'G', 'E', 'D']);
+  });
+
+  it('clicking a partly selected group selects it all', () => {
+    const { container } = renderExplorer();
+    fireEvent.click(chip(shapeGroup(), 'C'));
+    fireEvent.click(fretColumn(container, 'C', 3));
+    expect(pressed(shapeGroup())).toEqual(['C', 'A']);
+  });
+
+  it('clicking a single shape toggles it', () => {
+    const { container } = renderExplorer();
+    fireEvent.click(fretColumn(container, 'C', 3));
+    // Fret 6 on the C card is covered only by shape G (5–8).
+    fireEvent.click(fretColumn(container, 'C', 6));
+    expect(pressed(shapeGroup())).toEqual(['C', 'A', 'G']);
+    fireEvent.click(fretColumn(container, 'C', 6));
+    expect(pressed(shapeGroup())).toEqual(['C', 'A']);
+  });
+
+  it('five shapes collapse to all', () => {
+    renderExplorer();
+    for (const s of ['C', 'A', 'G', 'E']) fireEvent.click(chip(shapeGroup(), s));
+    expect(pressed(shapeGroup())).toEqual(['C', 'A', 'G', 'E']);
+    fireEvent.click(chip(shapeGroup(), 'D'));
+    expect(pressed(shapeGroup())).toEqual(['wszystkie']);
+  });
+
+  it('clicking an uncovered fret changes nothing', () => {
+    const { container } = renderExplorer();
+    fireEvent.click(chip(shapeGroup(), 'E'));
+    // A major card: the A +12 copy ends at fret 14, so fret 15 has no voicing.
+    fireEvent.click(fretColumn(container, 'A', 15));
+    expect(pressed(shapeGroup())).toEqual(['E']);
+  });
+
+  it('band click toggles one shape', () => {
+    const { container } = renderExplorer();
+    const band = card(container, 'C').querySelector('.board--h svg [data-role="band"][data-group="A"] text')!;
+    fireEvent.click(band);
+    expect(pressed(shapeGroup())).toEqual(['A']);
+    fireEvent.click(band);
+    expect(pressed(shapeGroup())).toEqual(['wszystkie']);
+  });
+
+  it('chord filter and reset still work', () => {
+    const { container } = renderExplorer();
+    fireEvent.click(chip(chordGroup(), 'G'));
+    expect(cards(container).filter((c) => !c.hidden).map((c) => c.dataset.key)).toEqual(['G']);
+    expect(pressed(chordGroup())).toEqual(['G']);
+    fireEvent.click(chip(shapeGroup(), 'E'));
+    fireEvent.click(fretColumn(container, 'G', 3));
+    expect(pressed(shapeGroup())).toEqual(['G', 'E']);
+    fireEvent.click(chip(chordGroup(), 'wszystkie'));
+    fireEvent.click(chip(shapeGroup(), 'wszystkie'));
+    expect(cards(container).every((c) => !c.hidden)).toBe(true);
+    expect(pressed(chordGroup())).toEqual(['wszystkie']);
+    expect(pressed(shapeGroup())).toEqual(['wszystkie']);
+    expectShown(container, ['C', 'A', 'G', 'E', 'D']);
   });
 });
