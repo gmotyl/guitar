@@ -1,7 +1,8 @@
 /**
  * Triads page state <-> URL query. Parameters: `mode` (`changes`; absent = Inversions), `root`
- * (0–11), `q` (`maj` | `min`), `set`, `i` (index), `prog` (field text), `key` (0–11), `start` (≥ 0),
- * `overlay` (`penta` | `scale`). Only non-default values are written; invalid or missing values read
+ * (0–11), `q` (`maj` | `min`), `set`, `i` (index), `prog` (field text), `key` (0–11), `at` (≥ 0, the
+ * Anchor chord), `start` (≥ 0, the Anchor Triad of chord `at`), `overlay` (`penta` | `scale`), `tones`
+ * (`off`; absent = on). Only non-default values are written; invalid or missing values read
  * as the default. A missing `key` with typed chord names means their detected key, so the writer
  * also keeps the default key when the names would detect another.
  *
@@ -17,14 +18,22 @@ export type Overlay = 'none' | 'penta' | 'scale';
 export interface TriadsState {
   mode: 'inversions' | 'changes';
   inversions: { root: PitchClass; quality: TriadQuality; set: 'all' | StringSetId; index: number };
-  changes: { src: string; key: PitchClass; set: StringSetId; start: number; overlay: Overlay };
+  changes: {
+    src: string;
+    key: PitchClass;
+    set: StringSetId;
+    at: number;
+    start: number;
+    overlay: Overlay;
+    tones: boolean;
+  };
 }
 
-/** C major, all sets, index 0 · Creep (`G B C Cm`) in G on G-B-e, start 0, no overlay. */
+/** C major, all sets, index 0 · Creep (`G B C Cm`) in G on G-B-e, Anchor at chord 1 Triad 0, no overlay, tones on. */
 export const DEFAULT_STATE: TriadsState = {
   mode: 'inversions',
   inversions: { root: 0, quality: 'major', set: 'all', index: 0 },
-  changes: { src: 'G B C Cm', key: 7, set: 'GBe', start: 0, overlay: 'none' },
+  changes: { src: 'G B C Cm', key: 7, set: 'GBe', at: 0, start: 0, overlay: 'none', tones: true },
 };
 
 const SET_IDS: readonly StringSetId[] = ['EAD', 'ADG', 'DGB', 'GBe'];
@@ -67,8 +76,10 @@ export function readTriadsQuery(search: string): TriadsState {
       src: p.get('prog') ?? d.changes.src,
       key: pitchClass(p.get('key')) ?? d.changes.key,
       set: mode === 'changes' ? (setId(set) ?? d.changes.set) : d.changes.set,
+      at: nat(p.get('at')) ?? d.changes.at,
       start: nat(p.get('start')) ?? d.changes.start,
       overlay: overlay === 'penta' || overlay === 'scale' ? overlay : d.changes.overlay,
+      tones: p.get('tones') === 'off' ? false : d.changes.tones,
     },
   };
 }
@@ -89,8 +100,10 @@ export function writeTriadsQuery(state: TriadsState): string {
   // A reader without `key` detects the key of typed names, so the default key is kept whenever the
   // names would detect another one (`A♭ G C` in G).
   if (ch.key !== d.changes.key || namesDetectOtherKey(ch.src, ch.key)) p.set('key', String(ch.key));
+  if (ch.at !== d.changes.at) p.set('at', String(ch.at));
   if (ch.start !== d.changes.start) p.set('start', String(ch.start));
   if (ch.overlay !== d.changes.overlay) p.set('overlay', ch.overlay);
+  if (!ch.tones) p.set('tones', 'off');
   const query = p.toString();
   return query === '' ? '' : `?${query}`;
 }

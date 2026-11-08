@@ -162,7 +162,8 @@ export function TriadsExplorer({ t }: TriadsExplorerProps) {
     const query = writeTriadsQuery({
       mode,
       inversions: { root: inv.root, quality: inv.quality, set: inv.set, index: inv.index },
-      changes: { src: ch.src, key: ch.key, set: ch.set, start: ch.start, overlay: ch.overlay },
+      // `at` and `tones` are not wired yet (Tasks 7-8): written as their defaults.
+      changes: { src: ch.src, key: ch.key, set: ch.set, at: 0, start: ch.start, overlay: ch.overlay, tones: true },
     });
     if (query === location.search) return;
     history.replaceState(history.state, '', location.pathname + query + location.hash);
