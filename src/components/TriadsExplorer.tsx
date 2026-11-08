@@ -12,6 +12,7 @@ import {
   STRING_SETS,
   chordPentatonic,
   chordScale,
+  nextWithNote,
   rungOrder,
   triadName,
   triadPath,
@@ -549,19 +550,27 @@ export function TriadsExplorer({ t }: TriadsExplorerProps) {
 
   const dots: FretDot[] = [];
   if (inv.showChordTones) {
-    // The chord's other tones on the whole neck: faint outlined dots with their Role.
+    // The chord's other tones on the strings of the chosen String sets: faint outlined dots with their Role.
+    const setStrings = new Set(sets.flatMap((s) => s.strings));
     TUNING.forEach((s, string) => {
+      if (!setStrings.has(string)) return;
       for (let fret = 0; fret <= MAX_FRET; fret++) {
         const r = role(mod12(s.pc + fret - inv.root), inv.quality);
+        // One dot per cell: the Triad's own cells are drawn filled below.
         if (!r || triadCells.some((c) => c.string === string && c.fret === fret)) continue;
-        dots.push({ string, fret, label: r, color: TRIAD_COLOR, variant: 'outline', dimmed: true });
+        dots.push({ string, fret, label: r, color: TRIAD_COLOR, variant: 'outline', dimmed: true, clickable: true });
       }
     });
   }
   triadCells.forEach((c, i) => {
     const r = triad.roles[i];
-    dots.push({ ...c, label: r, color: TRIAD_COLOR, variant: 'filled', ring: r === 'R' });
+    dots.push({ ...c, label: r, color: TRIAD_COLOR, variant: 'filled', ring: r === 'R', clickable: true });
   });
+  // A click shows the first Triad after the current one (Rung order, wrapping) that holds the note.
+  const onDotClick = (string: number, fret: number) => {
+    const j = nextWithNote(order, index, { string, fret });
+    if (j != null) patchInv({ index: j });
+  };
   const paths: FretPath[] = [{ cells: triadCells as FretPath['cells'], color: TRIAD_COLOR }];
 
   const rungs = Math.max(0, ...order.map((x) => x.rung)) + 1;
@@ -645,6 +654,7 @@ export function TriadsExplorer({ t }: TriadsExplorerProps) {
             frets={MAX_FRET}
             dots={dots}
             paths={paths}
+            onDotClick={onDotClick}
             ariaLabel={format(t.boardAria, { name, set: triad.set.label, frets })}
           />
         </div>

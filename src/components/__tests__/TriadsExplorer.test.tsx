@@ -257,6 +257,133 @@ describe('TriadsExplorer — Inversions mode', () => {
   });
 });
 
+// Dot click helpers. Strings are numbered high e first: e = 0, B = 1, G = 2, D = 3, A = 4, E = 5.
+const boardDot = (c: Element, string: number, fret: number) =>
+  dots(c).find((d) => cell(d) === `${string}:${fret}`);
+const clickDot = (c: Element, string: number, fret: number) => {
+  const dot = boardDot(c, string, fret);
+  if (!dot) throw new Error(`No dot on ${string}:${fret}`);
+  const hit = dot.querySelector('[data-role="dot-hit"]');
+  if (!hit) throw new Error(`Dot on ${string}:${fret} is not clickable`);
+  fireEvent.click(hit);
+};
+/** What the bar, the grid and the board show: name, set, frets, counter, pressed grid cell, filled cells. */
+const shown = (c: Element) => ({
+  name: nowName(c),
+  set: nowSet(c),
+  frets: nowFrets(c),
+  count: count(c),
+  grid: pressed(GRID),
+  board: filledDots(c).map(cell),
+});
+
+describe('TriadsExplorer — dot click in Inversions mode', () => {
+  afterEach(cleanup);
+
+  it('clicking G/5 cycles A-D-G 7-5-5, D-G-B 5-5-5, G-B-e 5-5-3', () => {
+    const { container } = renderExplorer();
+    expect(count(container)).toBe('1 / 16');
+    const seen: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      clickDot(container, 2, 5);
+      seen.push(`${nowSet(container)} ${nowFrets(container)} (${count(container)})`);
+      // The clicked note is always one of the three filled dots.
+      expect(filledDots(container).map(cell)).toContain('2:5');
+    }
+    // Mockup check 1.
+    expect(seen).toEqual(['A-D-G 7-5-5 (6 / 16)', 'D-G-B 5-5-5 (7 / 16)', 'G-B-e 5-5-3 (8 / 16)', 'A-D-G 7-5-5 (6 / 16)']);
+    expect(nowName(container)).toBe('C/E · 1. przewrót');
+    expect(filledDots(container).map(cell).sort()).toEqual(['2:5', '3:5', '4:7']);
+  });
+
+  it('dot click after Next shows the first Triad after the current one', () => {
+    const { container } = renderExplorer();
+    for (let i = 0; i < 4; i++) next();
+    expect(count(container)).toBe('5 / 16');
+    clickDot(container, 2, 5);
+    // Mockup check 2.
+    expect(`${nowSet(container)} ${nowFrets(container)} (${count(container)})`).toBe('A-D-G 7-5-5 (6 / 16)');
+  });
+
+  it('every chord-tone dot is clickable', () => {
+    const { container } = renderExplorer();
+    const check = () => {
+      for (const board of container.querySelectorAll('.board svg')) {
+        const all = Array.from(board.querySelectorAll('[data-role="dot"]'));
+        // 3 filled + 23 faint (C major on frets 0–15, all sets), one dot per cell.
+        expect(all).toHaveLength(26);
+        expect(new Set(all.map(cell)).size).toBe(all.length);
+        for (const d of all) {
+          expect((d as SVGElement).style.cursor).toBe('pointer');
+          expect(d.querySelector('[data-role="dot-hit"]')).not.toBeNull();
+        }
+      }
+    };
+    check();
+    // Mockup check 3: a filled and a faint dot both highlight under the pointer, alone.
+    const highlights = () => Array.from(hBoard(container).querySelectorAll('[data-role="dot-highlight"]'));
+    for (const at of [filledDots(container)[0], outlineDots(container)[0]]) {
+      fireEvent.mouseEnter(at);
+      expect(highlights()).toHaveLength(1);
+      expect(at.contains(highlights()[0])).toBe(true);
+      fireEvent.mouseLeave(at);
+      expect(highlights()).toHaveLength(0);
+    }
+    // Still clickable after a step and after a click.
+    next();
+    check();
+    clickDot(container, 2, 5);
+    check();
+  });
+
+  it('dot click updates name, counter and grid like Next', () => {
+    // Mockup check 4: G/5 from 1 / 16 lands on 6 / 16, the same Triad as Next ×5.
+    const clicked = renderExplorer();
+    clickDot(clicked.container, 2, 5);
+    const byClick = { ...shown(clicked.container), url: location.search };
+    cleanup();
+    history.replaceState(null, '', '/');
+    const stepped = renderExplorer();
+    for (let i = 0; i < 5; i++) next();
+    expect(byClick).toEqual({ ...shown(stepped.container), url: location.search });
+    expect(byClick.count).toBe('6 / 16');
+    expect(byClick.grid).toEqual(['C/E 7–5–5']);
+  });
+
+  it("faint chord tones stay on the chosen set's strings", () => {
+    const { container } = renderExplorer();
+    click('Struny', 'D-G-B');
+    const faint = outlineDots(container);
+    expect(faint.length).toBeGreaterThan(0);
+    // Only strings D, G, B: none on E, A or e.
+    expect(new Set(faint.map((d) => d.getAttribute('data-string')))).toEqual(new Set(['1', '2', '3']));
+    expect(faint.every((d) => (d as SVGElement).style.cursor === 'pointer')).toBe(true);
+    // A click on the faint B/5 shows D-G-B 5-5-5.
+    expect(faint.map(cell)).toContain('1:5');
+    clickDot(container, 1, 5);
+    expect(`${nowSet(container)} ${nowFrets(container)} (${count(container)})`).toBe('D-G-B 5-5-5 (2 / 4)');
+    // Back to all sets: faint tones on all six strings again.
+    click('Struny', 'wszystkie grupy');
+    expect(new Set(outlineDots(container).map((d) => d.getAttribute('data-string')))).toEqual(
+      new Set(['0', '1', '2', '3', '4', '5']),
+    );
+  });
+
+  it('board dots are not in the tab order', () => {
+    const { container } = renderExplorer();
+    for (const board of container.querySelectorAll('.board svg')) {
+      // Nothing inside the board takes focus: no tabindex, no focusable elements; hit circles are aria-hidden.
+      expect(board.querySelectorAll('[tabindex], a, button, input, [focusable="true"]')).toHaveLength(0);
+      const hits = Array.from(board.querySelectorAll('[data-role="dot-hit"]'));
+      expect(hits).toHaveLength(26);
+      expect(hits.every((h) => h.getAttribute('aria-hidden') === 'true')).toBe(true);
+    }
+    // The only tab stops with a tabindex are the board scroll regions themselves.
+    const withTabindex = Array.from(container.querySelectorAll('[tabindex]'));
+    expect(withTabindex.every((el) => el.classList.contains('board'))).toBe(true);
+  });
+});
+
 // Chord changes helpers.
 const FIELD = 'Progresja — Numbery albo nazwy akordów';
 const openChanges = (lang: 'pl' | 'en' = 'pl') => {
