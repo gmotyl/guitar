@@ -15,7 +15,9 @@ describe('triadsUrl', () => {
       src: DEFAULT_CHANGES.src,
       key: DEFAULT_CHANGES.key,
       set: DEFAULT_CHANGES.set,
-      start: DEFAULT_CHANGES.start,
+      at: DEFAULT_CHANGES.anchor.at,
+      start: DEFAULT_CHANGES.anchor.start,
+      tones: DEFAULT_CHANGES.tones,
     });
   });
 

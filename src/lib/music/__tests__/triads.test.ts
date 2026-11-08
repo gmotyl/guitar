@@ -8,7 +8,6 @@ import {
   nextWithNote,
   rungOrder,
   triadName,
-  triadPath,
   triads,
   type PathChord,
   type StringSet,
@@ -192,48 +191,6 @@ const min = (root: number): PathChord => ({ root, quality: 'minor' });
 const dist = (a: Triad, b: Triad) => a.frets.reduce((acc, f, i) => acc + Math.abs(f - b.frets[i]), 0);
 const fretSum = (t: Triad) => t.frets[0] + t.frets[1] + t.frets[2];
 
-describe('triadPath', () => {
-  it('triadPath starts Creep on G-B-e at G/B 4-3-3 then B 4-4-2', () => {
-    const path = triadPath([maj(G), maj(B), maj(C), min(C)], set('GBe'), 0);
-    expect(path).toHaveLength(4);
-    expect(`${triadName(path[0])} ${frets(path[0])}`).toBe('G/B 4-3-3');
-    expect(`${triadName(path[1])} ${frets(path[1])}`).toBe('B 4-4-2');
-    expect(path.map((t) => t.root)).toEqual([G, B, C, C]);
-    expect(path[3].quality).toBe('minor');
-  });
-
-  it('triadPath picks the nearest Triad and breaks ties low', () => {
-    let ties = 0;
-    for (const s of STRING_SETS) {
-      for (let r1 = 0; r1 < 12; r1++) {
-        for (let r2 = 0; r2 < 12; r2++) {
-          for (const q of ['major', 'minor'] as const) {
-            const chords: PathChord[] = [maj(r1), { root: r2, quality: q }];
-            for (let start = 0; start < triads(r1, 'major', s).length; start++) {
-              const [first, next] = triadPath(chords, s, start);
-              expect(first).toEqual(triads(r1, 'major', s)[start]);
-              const candidates = triads(r2, q, s);
-              const best = Math.min(...candidates.map((c) => dist(c, first)));
-              const tied = candidates.filter((c) => dist(c, first) === best);
-              if (tied.length > 1) ties++;
-              expect(dist(next, first)).toBe(best);
-              expect(fretSum(next)).toBe(Math.min(...tied.map(fretSum)));
-            }
-          }
-        }
-      }
-    }
-    expect(ties).toBeGreaterThan(0);
-  });
-
-  it('triadPath wraps the start index', () => {
-    const chords = [maj(G), maj(B), maj(C), min(C)];
-    const n = triads(G, 'major', set('GBe')).length;
-    expect(triadPath(chords, set('GBe'), n).map(frets)).toEqual(triadPath(chords, set('GBe'), 0).map(frets));
-    expect(triadPath(chords, set('GBe'), n + 1).map(frets)).toEqual(triadPath(chords, set('GBe'), 1).map(frets));
-  });
-});
-
 /** Frozen copy of the pre-Anchor `triadPath` (first chord at `start`, nearest Triads forward). */
 function legacyPath(chords: readonly PathChord[], s: StringSet, start: number): Triad[] {
   if (chords.length === 0) return [];
@@ -261,10 +218,18 @@ describe('anchoredPath', () => {
         for (let k = 0; k <= 3; k++) {
           const expected = legacyPath(r.chords, s, k).map(frets);
           expect(anchoredPath(r.chords, s, { at: 0, start: k }).map(frets)).toEqual(expected);
-          expect(triadPath(r.chords, s, k).map(frets)).toEqual(expected);
         }
       }
     }
+  });
+
+  it('anchoredPath starts Creep on G-B-e at G/B 4-3-3 then B 4-4-2', () => {
+    const path = anchoredPath(creep, set('GBe'), { at: 0, start: 0 });
+    expect(path).toHaveLength(4);
+    expect(`${triadName(path[0])} ${frets(path[0])}`).toBe('G/B 4-3-3');
+    expect(`${triadName(path[1])} ${frets(path[1])}`).toBe('B 4-4-2');
+    expect(path.map((t) => t.root)).toEqual([G, B, C, C]);
+    expect(path[3].quality).toBe('minor');
   });
 
   it('anchoredPath builds backward from a middle Anchor (Creep, C 12-13-12)', () => {

@@ -554,18 +554,87 @@ describe('TriadsExplorer — Chord changes mode', () => {
     expect(currentTile()).toBe(2);
   });
 
-  it('other start moves the path one Triad up', () => {
+  it('Chord changes keeps the Creep default path', () => {
     const { container } = openChanges();
-    next();
+    const shown: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      shown.push(nowFrets(container));
+      next();
+    }
+    expect(shown).toEqual(['4-3-3', '4-4-2', '5-5-3', '5-4-3']);
+    expect(currentTile()).toBe(0);
+  });
+
+  it('Inny przewrót moves the Anchor on the current chord', () => {
+    const { container } = openChanges();
+    const pathFrets = () => {
+      const out: string[] = [];
+      for (let i = 0; i < 4; i++) {
+        out.push(nowFrets(container));
+        next();
+      }
+      return out;
+    };
+    fireEvent.click(tiles()[2]);
+    expect(nowFrets(container)).toBe('5-5-3');
+    otherStart();
+    // C moves one Triad up the neck and stays current; the other chords follow the nearest rule.
+    expect(currentTile()).toBe(2);
+    expect(nowName(container)).toMatch(/^3\. 4 · C/);
+    expect(nowFrets(container)).toBe('9-8-8');
+    // The button carries no left arrow: it moves the Anchor, not backwards.
+    expect(text(screen.getByRole('button', { name: '↻ Inny przewrót' }))).not.toContain('←');
+    fireEvent.click(tiles()[0]);
+    expect(pathFrets()).toEqual(['7-8-7', '8-7-7', '9-8-8', '8-8-8']);
+    // On the first chord it steps that chord's Triad, as the old start did; wrapping back to the first one.
+    cleanup();
+    history.replaceState(null, '', '/');
+    const { container: c2 } = openChanges();
     otherStart();
     expect(currentTile()).toBe(0);
-    expect(nowName(container)).toBe('1. 1 · G/D');
-    expect(nowDetail(container)).toBe('teraz 2. przewrót, progi 7–8–7 → dalej B/D# (progi 8–7–7)');
-    // Pressing it once per G Triad on G-B-e comes back to the first start.
+    expect(nowName(c2)).toBe('1. 1 · G/D');
+    expect(nowDetail(c2)).toBe('teraz 2. przewrót, progi 7–8–7 → dalej B/D# (progi 8–7–7)');
     const n = triads(7, 'major', STRING_SETS[3]).length;
     for (let i = 1; i < n; i++) otherStart();
-    expect(nowName(container)).toBe('1. 1 · G/B');
-    expect(nowDetail(container)).toContain('progi 4–3–3');
+    expect(nowName(c2)).toBe('1. 1 · G/B');
+    expect(nowDetail(c2)).toContain('progi 4–3–3');
+  });
+
+  it('set, field, preset and key reset the Anchor', () => {
+    const { container } = openChanges();
+    const anchorOnC = () => {
+      fireEvent.click(tiles()[2]);
+      otherStart();
+      expect(nowFrets(container)).toBe('9-8-8');
+      fireEvent.click(tiles()[0]);
+      expect(nowFrets(container)).toBe('7-8-7');
+    };
+    // String set: away and back, the path starts from chord 1, Triad 0 again.
+    anchorOnC();
+    click('Struny', 'D-G-B');
+    click('Struny', 'G-B-e');
+    fireEvent.click(tiles()[0]);
+    expect(nowFrets(container)).toBe('4-3-3');
+    expect(location.search).not.toMatch(/at=|start=/);
+    // Field: other chords and back.
+    anchorOnC();
+    typeProg('G C D G');
+    typeProg('G B C Cm');
+    expect(currentTile()).toBe(0);
+    expect(nowFrets(container)).toBe('4-3-3');
+    // Preset: another song and back to Creep.
+    anchorOnC();
+    fireEvent.change(songSelect(), { target: { value: 'time' } });
+    fireEvent.change(songSelect(), { target: { value: 'creep' } });
+    expect(nowFrets(container)).toBe('4-3-3');
+    // Key: away and back (the names move with the key).
+    anchorOnC();
+    click('Tonacja', 'C');
+    click('Tonacja', 'G');
+    expect(field().value).toBe('G B C Cm');
+    fireEvent.click(tiles()[0]);
+    expect(nowFrets(container)).toBe('4-3-3');
+    expect(location.search).toBe('?mode=changes');
   });
 
   it('clicking a tile selects that chord', () => {
@@ -1150,6 +1219,27 @@ describe('TriadsExplorer — state in the URL', () => {
     const r = renderExplorer();
     expect(pressed('Akord')).toEqual(['A']);
     expect(count(r.container)).toMatch(/^1 \/ /);
+  });
+
+  it('a shared Anchor link restores the path', () => {
+    visit('?mode=changes&at=2&start=3&tones=off');
+    const { container } = renderExplorer();
+    expect(tileNames()).toBe('G B C Cm');
+    const shown: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      shown.push(nowFrets(container));
+      next();
+    }
+    expect(shown).toEqual(['12-12-10', '11-12-11', '12-13-12', '12-13-11']);
+    // The Anchor and the tones switch survive the URL rewrite.
+    expect(location.search).toBe('?mode=changes&at=2&start=3&tones=off');
+    cleanup();
+    // `at` and `start` past the end wrap into range.
+    visit('?mode=changes&at=6&start=7');
+    const r = renderExplorer();
+    fireEvent.click(tiles()[2]);
+    expect(nowFrets(r.container)).toBe('12-13-12');
+    expect(location.search).toBe('?mode=changes&at=2&start=3');
   });
 
   it('an explicit default key survives the URL rewrite and a reload', () => {

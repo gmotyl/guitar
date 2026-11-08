@@ -169,11 +169,6 @@ export function anchoredPath(chords: readonly PathChord[], set: StringSet, ancho
   return path.slice(lo, hi + 1);
 }
 
-/** The Triad path anchored on the first chord. Kept until its last caller moves to `anchoredPath`. */
-export function triadPath(chords: readonly PathChord[], set: StringSet, start: number): Triad[] {
-  return anchoredPath(chords, set, { at: 0, start });
-}
-
 /**
  * Which String set and Triad of `chord` a click on `cell` anchors. Candidates = String sets
  * holding `cell.string`, low to high, with a Triad of `chord` containing `cell`. A click on the

@@ -10,13 +10,14 @@ import { deleteProgression, loadSaved, saveProgression, type SavedProgression } 
 import { readTriadsQuery, writeTriadsQuery } from '../lib/triadsUrl';
 import {
   STRING_SETS,
+  anchoredPath,
   chordPentatonic,
   chordScale,
   nextWithNote,
   rungOrder,
   triadName,
-  triadPath,
   triads,
+  type Anchor,
   type PathChord,
   type RungTriad,
   type ScaleNote,
@@ -65,12 +66,14 @@ export interface ChangesState {
   set: StringSetId;
   /** Current chord (0-based place in the progression). */
   idx: number;
-  /** Which Triad of the first chord starts the Triad path. */
-  start: number;
+  /** The chord and its Triad that pin the Triad path. */
+  anchor: Anchor;
   /** Song preset id (or `own:<name>` for an own progression) in the select, null for a typed progression. */
   preset: string | null;
   /** Soloing overlay of the current chord (the two switches are exclusive). */
   overlay: Overlay;
+  /** Show the current chord's other tones on the neck (the switch arrives with the dot click). */
+  tones: boolean;
 }
 export type Overlay = 'none' | 'penta' | 'scale';
 export const DEFAULT_CHANGES: ChangesState = {
@@ -78,10 +81,13 @@ export const DEFAULT_CHANGES: ChangesState = {
   key: 7,
   set: 'GBe',
   idx: 0,
-  start: 0,
+  anchor: { at: 0, start: 0 },
   preset: 'creep',
   overlay: 'none',
+  tones: true,
 };
+/** The Anchor every reset goes back to: chord 1, its first Triad. */
+const FIRST_ANCHOR: Anchor = { at: 0, start: 0 };
 
 type ValidProgression = Extract<ParseResult, { ok: true }>;
 /** Order colour of the i-th chord of a progression (`--k0`…`--k6`, cycling). */
@@ -122,8 +128,8 @@ const SONGS_ID = 'triads-songs';
 const OWN = 'own:';
 
 /**
- * Page state from a shared link. The codec leaves `i` and `start` unbounded, so they are fitted to the
- * chosen chord / progression here; typed chord names take their detected key unless `key` is given.
+ * Page state from a shared link. The codec leaves `i`, `at` and `start` unbounded, so they are fitted to
+ * the chosen chord / progression here (`at` modulo the chord count, `start` modulo that chord's Triads); typed chord names take their detected key unless `key` is given.
  */
 function stateFromQuery(search: string): { mode: Mode; inv: InversionsState; ch: ChangesState } {
   const q = readTriadsQuery(search);
@@ -134,13 +140,23 @@ function stateFromQuery(search: string): { mode: Mode; inv: InversionsState; ch:
   const qc = q.changes;
   const r = parseProgression(qc.src, qc.key);
   const key = r.ok && r.kind === 'names' && !new URLSearchParams(search).has('key') ? r.key : qc.key;
-  let start = 0;
+  let anchor = FIRST_ANCHOR;
   if (r.ok) {
-    const first = r.chords[0];
-    start = qc.start % Math.max(1, triads(first.root, first.quality, setById(qc.set)).length);
+    const at = qc.at % r.chords.length;
+    const chord = r.chords[at];
+    anchor = { at, start: qc.start % Math.max(1, triads(chord.root, chord.quality, setById(qc.set)).length) };
   }
   const preset = SONG_PRESETS.find((p) => p.src === qc.src)?.id ?? null;
-  const ch: ChangesState = { ...DEFAULT_CHANGES, src: qc.src, key, set: qc.set, start, overlay: qc.overlay, preset };
+  const ch: ChangesState = {
+    ...DEFAULT_CHANGES,
+    src: qc.src,
+    key,
+    set: qc.set,
+    anchor,
+    overlay: qc.overlay,
+    tones: qc.tones,
+    preset,
+  };
   return { mode: q.mode, inv, ch };
 }
 
@@ -163,8 +179,15 @@ export function TriadsExplorer({ t }: TriadsExplorerProps) {
     const query = writeTriadsQuery({
       mode,
       inversions: { root: inv.root, quality: inv.quality, set: inv.set, index: inv.index },
-      // `at` and `tones` are not wired yet (Tasks 7-8): written as their defaults.
-      changes: { src: ch.src, key: ch.key, set: ch.set, at: 0, start: ch.start, overlay: ch.overlay, tones: true },
+      changes: {
+        src: ch.src,
+        key: ch.key,
+        set: ch.set,
+        at: ch.anchor.at,
+        start: ch.anchor.start,
+        overlay: ch.overlay,
+        tones: ch.tones,
+      },
     });
     if (query === location.search) return;
     history.replaceState(history.state, '', location.pathname + query + location.hash);
@@ -247,7 +270,7 @@ export function TriadsExplorer({ t }: TriadsExplorerProps) {
   function renderChanges() {
     const t2 = t.changes;
     const set = setById(ch.set);
-    const path = triadPath(prog.chords, set, ch.start);
+    const path = anchoredPath(prog.chords, set, ch.anchor);
     const idx = Math.min(ch.idx, path.length - 1);
     const cur = path[idx];
     const nxt = path[(idx + 1) % path.length];
@@ -257,13 +280,13 @@ export function TriadsExplorer({ t }: TriadsExplorerProps) {
 
     const onInput = (value: string) => {
       const r = parseProgression(value, ch.key);
-      // The board keeps the last valid chords, so the chord and start reset only when the text
+      // The board keeps the last valid chords, so the chord and Anchor reset only when the text
       // parses to different chords (invalid intermediate text keeps the selection).
       const changed = r.ok && !sameChords(r.chords, prog.chords);
       patchCh({
         src: value,
         preset: null,
-        ...(changed ? { idx: 0, start: 0 } : {}),
+        ...(changed ? { idx: 0, anchor: FIRST_ANCHOR } : {}),
         ...(r.ok && r.kind === 'names' ? { key: r.key } : {}),
       });
     };
@@ -271,18 +294,18 @@ export function TriadsExplorer({ t }: TriadsExplorerProps) {
       // Typed names move from the current key to the picked one; both are explicit, since
       // re-detecting either could tie elsewhere.
       const moved = transposeNames(ch.src, key, ch.key);
-      patchCh({ key, start: 0, ...(moved != null ? { src: moved } : {}) });
+      patchCh({ key, anchor: FIRST_ANCHOR, ...(moved != null ? { src: moved } : {}) });
     };
     const pickSong = (id: string) => {
       if (id.startsWith(OWN)) {
         const own = saved.find((p) => p.name === id.slice(OWN.length));
-        if (own) patchCh({ src: own.src, key: own.key, preset: id, idx: 0, start: 0 });
+        if (own) patchCh({ src: own.src, key: own.key, preset: id, idx: 0, anchor: FIRST_ANCHOR });
         return;
       }
       const song = SONG_PRESETS.find((p) => p.id === id);
       if (!song) return;
       const r = parseProgression(song.src, ch.key);
-      patchCh({ src: song.src, preset: id, idx: 0, start: 0, ...(r.ok ? { key: r.key } : {}) });
+      patchCh({ src: song.src, preset: id, idx: 0, anchor: FIRST_ANCHOR, ...(r.ok ? { key: r.key } : {}) });
     };
     const saveOwn = () => {
       const name = saveName?.trim();
@@ -297,10 +320,13 @@ export function TriadsExplorer({ t }: TriadsExplorerProps) {
       setSaved(deleteProgression(ownSelected, saved));
       patchCh({ preset: null });
     };
+    // "↻ Inny przewrót": the Anchor moves to the current chord's next Triad up the neck (wrapping);
+    // the current chord stays current.
     const otherStart = () => {
-      const first: PathChord = prog.chords[0];
-      const count = Math.max(1, triads(first.root, first.quality, set).length);
-      patchCh({ start: (ch.start + 1) % count, idx: 0 });
+      const chord: PathChord = prog.chords[idx];
+      const own = triads(chord.root, chord.quality, set);
+      const k = own.findIndex((x) => x.frets.join() === cur.frets.join());
+      patchCh({ anchor: { at: idx, start: (k + 1) % Math.max(1, own.length) } });
     };
 
     let lineClass = 'tr';
@@ -456,7 +482,7 @@ export function TriadsExplorer({ t }: TriadsExplorerProps) {
           )}
           {chipRow(
             t.setsLabel,
-            STRING_SETS.map((s) => chip(s.label, ch.set === s.id, () => patchCh({ set: s.id, start: 0 }))),
+            STRING_SETS.map((s) => chip(s.label, ch.set === s.id, () => patchCh({ set: s.id, anchor: FIRST_ANCHOR }))),
           )}
           {chipRow(t.neckLabel, [
             chip(
