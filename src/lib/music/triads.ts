@@ -174,6 +174,33 @@ export function triadPath(chords: readonly PathChord[], set: StringSet, start: n
   return anchoredPath(chords, set, { at: 0, start });
 }
 
+/**
+ * Which String set and Triad of `chord` a click on `cell` anchors. Candidates = String sets
+ * holding `cell.string`, low to high, with a Triad of `chord` containing `cell`. A click on the
+ * current Triad `cur` moves to the next candidate after `set` (wrapping, `set` itself when it is
+ * the only one); any other click stays on `set` when it is a candidate, else takes the first
+ * candidate. `start` indexes `triads(chord, set)`; null when there is no candidate.
+ */
+export function anchorForClick(
+  chord: PathChord,
+  set: StringSetId,
+  cur: Triad,
+  cell: Cell,
+): { set: StringSetId; start: number } | null {
+  const candidates: { set: StringSetId; start: number; pos: number }[] = [];
+  STRING_SETS.forEach((s, pos) => {
+    if (!s.strings.includes(cell.string)) return;
+    const start = triads(chord.root, chord.quality, s).findIndex((t) => holds(t, cell));
+    if (start >= 0) candidates.push({ set: s.id, start, pos });
+  });
+  if (candidates.length === 0) return null;
+  const pos = STRING_SETS.findIndex((s) => s.id === set);
+  const pick = holds(cur, cell)
+    ? (candidates.find((c) => c.pos > pos) ?? candidates[0])
+    : (candidates.find((c) => c.set === set) ?? candidates[0]);
+  return { set: pick.set, start: pick.start };
+}
+
 export interface ScaleNote {
   pc: PitchClass;
   /** Interval label relative to the chord root: 'R' | 'b2' | '2' | 'b3' | '3' | '4' | '#4' | '5' | 'b6' | '6' | 'b7' | '7'. */

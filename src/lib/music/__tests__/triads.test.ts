@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   STRING_SETS,
+  anchorForClick,
   anchoredPath,
   chordPentatonic,
   chordScale,
@@ -322,6 +323,52 @@ describe('anchoredPath', () => {
     }
     expect(forwardTies).toBeGreaterThan(0);
     expect(backwardTies).toBeGreaterThan(0);
+  });
+});
+
+describe('anchorForClick', () => {
+  const triadAt = (chord: PathChord, id: StringSetId, f: string) =>
+    triads(chord.root, chord.quality, set(id)).find((t) => frets(t) === f)!;
+  const picked = (chord: PathChord, r: { set: StringSetId; start: number } | null) =>
+    r && `${r.set} ${frets(triads(chord.root, chord.quality, set(r.set))[r.start])}`;
+
+  it('anchorForClick stays on the current set when it holds the note', () => {
+    const r = anchorForClick(maj(C), 'GBe', triadAt(maj(C), 'GBe', '5-5-3'), { string: 1, fret: 13 });
+    expect(r).toEqual({ set: 'GBe', start: 3 });
+    expect(picked(maj(C), r)).toBe('GBe 12-13-12');
+  });
+
+  it('anchorForClick on the current Triad moves to the next set with that string', () => {
+    const r = anchorForClick(maj(C), 'GBe', triadAt(maj(C), 'GBe', '5-5-3'), { string: 2, fret: 5 });
+    expect(r).toEqual({ set: 'ADG', start: 1 });
+    expect(picked(maj(C), r)).toBe('ADG 7-5-5');
+  });
+
+  it('anchorForClick cycles the sets on repeated clicks', () => {
+    const cell = { string: 2, fret: 5 };
+    let id: StringSetId = 'ADG';
+    let cur = triadAt(maj(C), 'ADG', '7-5-5');
+    const seen: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      const r: { set: StringSetId; start: number } = anchorForClick(maj(C), id, cur, cell)!;
+      seen.push(picked(maj(C), r)!);
+      id = r.set;
+      cur = triads(C, 'major', set(id))[r.start];
+    }
+    expect(seen).toEqual(['DGB 5-5-5', 'GBe 5-5-3', 'ADG 7-5-5']);
+  });
+
+  it('anchorForClick picks the lowest set for a string outside the current set', () => {
+    const cur = triads(G, 'major', set('GBe'))[0];
+    const r = anchorForClick(maj(G), 'GBe', cur, { string: 4, fret: 10 });
+    expect(r?.set).toBe('EAD');
+    expect(picked(maj(G), r)).toBe('EAD 10-10-9');
+  });
+
+  it('anchorForClick returns null when no Triad contains the note', () => {
+    const cur = triadAt(maj(C), 'GBe', '5-5-3');
+    // G string fret 1 is G#, not a C major tone.
+    expect(anchorForClick(maj(C), 'GBe', cur, { string: 2, fret: 1 })).toBeNull();
   });
 });
 
