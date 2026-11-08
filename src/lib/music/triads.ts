@@ -130,26 +130,48 @@ export interface PathChord {
 
 const wrap = (n: number, m: number) => ((n % m) + m) % m;
 
+/** The chord of the progression (`at`) and its Triad (`start`, index into `triads(chord, set)`) that pin the Triad path. */
+export type Anchor = { at: number; start: number };
+
+/** The chord's Triad with the least summed |fret difference| to `to`, ties to the lower fret sum. */
+function nearest(chord: PathChord, set: StringSet, to: Triad): Triad | undefined {
+  const dist = (t: Triad) => t.frets.reduce((acc, f, i) => acc + Math.abs(f - to.frets[i]), 0);
+  // Candidates are sorted by fret sum, so a strict `<` keeps the lower one on ties.
+  let best: Triad | undefined;
+  for (const t of triads(chord.root, chord.quality, set)) if (!best || dist(t) < dist(best)) best = t;
+  return best;
+}
+
 /**
- * A Triad path on one String set: Triad 0 = the first chord's Triad at `start mod n`; each next
- * Triad is the next chord's Triad with the least summed |fret difference| to the previous one,
- * ties to the lower fret sum.
+ * A Triad path on one String set built outward from the Anchor: the Anchor chord's Triad at
+ * `start` (both `at` and `start` wrapped into range); every later chord takes its nearest Triad
+ * to the previous one, every earlier chord its nearest Triad to the next one.
  */
-export function triadPath(chords: readonly PathChord[], set: StringSet, start: number): Triad[] {
+export function anchoredPath(chords: readonly PathChord[], set: StringSet, anchor: Anchor): Triad[] {
   if (chords.length === 0) return [];
-  const first = triads(chords[0].root, chords[0].quality, set);
-  if (first.length === 0) return [];
-  const path: Triad[] = [first[wrap(start, first.length)]];
-  for (const chord of chords.slice(1)) {
-    const prev = path[path.length - 1];
-    const dist = (t: Triad) => t.frets.reduce((acc, f, i) => acc + Math.abs(f - prev.frets[i]), 0);
-    // Candidates are sorted by fret sum, so a strict `<` keeps the lower one on ties.
-    let best: Triad | undefined;
-    for (const t of triads(chord.root, chord.quality, set)) if (!best || dist(t) < dist(best)) best = t;
+  const at = wrap(anchor.at, chords.length);
+  const own = triads(chords[at].root, chords[at].quality, set);
+  if (own.length === 0) return [];
+  const path: Triad[] = new Array(chords.length);
+  path[at] = own[wrap(anchor.start, own.length)];
+  let hi = at;
+  while (hi + 1 < chords.length) {
+    const best = nearest(chords[hi + 1], set, path[hi]);
     if (!best) break;
-    path.push(best);
+    path[++hi] = best;
   }
-  return path;
+  let lo = at;
+  while (lo > 0) {
+    const best = nearest(chords[lo - 1], set, path[lo]);
+    if (!best) break;
+    path[--lo] = best;
+  }
+  return path.slice(lo, hi + 1);
+}
+
+/** The Triad path anchored on the first chord. Kept until its last caller moves to `anchoredPath`. */
+export function triadPath(chords: readonly PathChord[], set: StringSet, start: number): Triad[] {
+  return anchoredPath(chords, set, { at: 0, start });
 }
 
 export interface ScaleNote {
