@@ -97,12 +97,13 @@ const orderColor = (i: number) => `var(--k${i % 7})`;
 const OPEN_PITCH = [24, 19, 15, 10, 5, 0];
 const pitchesOf = (t: Triad) => t.set.strings.map((s, i) => OPEN_PITCH[s] + t.frets[i]);
 const cellsOf = (t: Triad) => t.set.strings.map((string, i) => ({ string, fret: t.frets[i] }));
-/** Overlay dot look, as in the mockup: very faint small dots, the root a bit stronger in the chord colour. */
+/** Overlay dot look (mockup option A): grey outlines, the root filled in the chord colour and stronger. */
 const OVERLAY_GROUP = 'overlay';
-const OVERLAY_OP = 0.22;
-const OVERLAY_R = 7.5;
-const OVERLAY_ROOT_OP = 0.35;
-const OVERLAY_ROOT_R = 9;
+const OVERLAY_OP = 0.5;
+const OVERLAY_R = 9;
+const OVERLAY_STROKE = 2;
+const OVERLAY_ROOT_OP = 0.75;
+const OVERLAY_ROOT_R = 10.5;
 /** Faint chord tones in Chord changes: explicit, so they stay readable next to an overlay. */
 const TONES_OP = 0.4;
 const sameTriad = (a: Triad, b: Triad) => a.set.id === b.set.id && a.frets.every((f, i) => f === b.frets[i]);
@@ -395,7 +396,13 @@ export function TriadsExplorer({ t }: TriadsExplorerProps) {
           group: OVERLAY_GROUP,
           ...(root
             ? { color: curColor, variant: 'filled' as const, opacity: OVERLAY_ROOT_OP, radius: OVERLAY_ROOT_R }
-            : { color: 'var(--muted)', variant: 'outline' as const, opacity: OVERLAY_OP, radius: OVERLAY_R }),
+            : {
+                color: 'var(--muted)',
+                variant: 'outline' as const,
+                opacity: OVERLAY_OP,
+                radius: OVERLAY_R,
+                stroke: OVERLAY_STROKE,
+              }),
         });
       }
     });

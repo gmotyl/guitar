@@ -819,6 +819,26 @@ const overlayDots = (c: Element) => dots(c).filter((d) => d.getAttribute('data-g
 const triadDots = (c: Element) => dots(c).filter((d) => d.getAttribute('data-group') !== 'overlay');
 const radius = (d: Element) => Number(d.querySelector('circle')!.getAttribute('r'));
 const opacity = (d: Element) => Number(d.getAttribute('opacity') ?? '1');
+const strokeWidth = (d: Element) => Number(d.querySelector('circle')!.getAttribute('stroke-width'));
+/** Overlay look (option A): R filled in `color` at 0.75 / r 10.5; the rest grey outlines at 0.5 / r 9 / outline 2. */
+const expectOverlayLook = (c: Element, color: string) => {
+  const roots = overlayDots(c).filter((d) => label(d) === 'R');
+  const rest = overlayDots(c).filter((d) => label(d) !== 'R');
+  expect(roots.length).toBeGreaterThan(0);
+  expect(rest.length).toBeGreaterThan(0);
+  for (const d of roots) {
+    expect(fillOf(d)).toBe(color);
+    expect(opacity(d)).toBeCloseTo(0.75);
+    expect(radius(d)).toBe(10.5);
+  }
+  for (const d of rest) {
+    expect(fillOf(d)).toBe('var(--card)');
+    expect(d.querySelector('circle')!.getAttribute('stroke')).toBe('var(--muted)');
+    expect(opacity(d)).toBeCloseTo(0.5);
+    expect(radius(d)).toBe(9);
+    expect(strokeWidth(d)).toBe(2);
+  }
+};
 /** The two overlay switches (the Gryf row also holds the chord tones switch, last). */
 const switches = () => buttons('Gryf').slice(0, 2);
 /** These overlay tests look at every overlay note, so they turn the chord tones off first. */
@@ -856,42 +876,63 @@ describe('TriadsExplorer — soloing overlays', () => {
     expect(buttons('Neck').map(isOn)).toEqual([false, false, true]);
   });
 
-  it('the Chord pentatonic is faint with a stronger root', () => {
+  // Mockup check 1: grey outlines at 0.5 / r 9 / outline 2; R filled in the chord colour at 0.75 / r 10.5.
+  it('pentatonic overlay dots use opacity 0.5 / 0.75 and radius 9 / 10.5', () => {
     const { container } = openChanges();
-    tonesOff();
+    tonesOff(); // R, 3 and 5 would otherwise be chord tones
     next(); // Creep: current B
     expect(text(pentaSwitch())).toBe('pentatonika akordu (B durowa)');
     fireEvent.click(pentaSwitch());
     expect(isOn(pentaSwitch())).toBe(true);
     const triadCells = new Set(triadDots(container).map(cell));
-    expect(triadCells.size).toBeGreaterThan(3);
     const want = expectedOverlay(11, [0, 2, 4, 7, 9], triadCells);
     expect(overlayMap(container)).toEqual(want);
     // Labels relative to B: R 2 3 5 6.
     expect(new Set(want.values())).toEqual(new Set(['R', '2', '3', '5', '6']));
-    const roots = overlayDots(container).filter((d) => label(d) === 'R');
-    const rest = overlayDots(container).filter((d) => label(d) !== 'R');
-    expect(roots.length).toBeGreaterThan(0);
-    // R: filled in the current order colour (tile 2 → --k1), a bit stronger and bigger than the rest.
-    for (const d of roots) {
-      expect(fillOf(d)).toBe('var(--k1)');
-      expect(opacity(d)).toBeCloseTo(0.35);
-      expect(radius(d)).toBe(9);
-    }
-    for (const d of rest) {
-      expect(fillOf(d)).toBe('var(--card)');
-      expect(opacity(d)).toBeCloseTo(0.22);
-      expect(radius(d)).toBe(7.5);
-    }
-    // Triad dots stay full strength, full size and are drawn after (on top of) the overlay.
+    expectOverlayLook(container, 'var(--k1)');
+  });
+
+  // Mockup check 2: the overlay is drawn first and leaves the current and dashed Triads' cells alone.
+  it('overlay dots sit under the path and skip its cells', () => {
+    const { container } = openChanges();
+    next(); // B
+    fireEvent.click(pentaSwitch());
+    const path = triadDots(container).filter((d) => fillOf(d) !== 'var(--card)' || isDashed(d));
+    expect(solidFilled(container).filter((d) => d.getAttribute('data-group') !== 'overlay')).toHaveLength(3);
+    expect(path.filter(isDashed).length).toBeGreaterThan(0);
+    const pathCells = new Set(path.map(cell));
+    expect(overlayDots(container).length).toBeGreaterThan(0);
+    expect(overlayDots(container).some((d) => pathCells.has(cell(d)))).toBe(false);
+    // Overlay dots come first in the SVG (under), the path dots last (on top), full strength.
     const all = dots(container);
     const lastOverlay = Math.max(...overlayDots(container).map((d) => all.indexOf(d)));
-    for (const d of triadDots(container)) {
+    for (const d of path) {
       expect(all.indexOf(d)).toBeGreaterThan(lastOverlay);
       expect(opacity(d)).toBe(1);
-      expect(radius(d)).toBeGreaterThan(9);
+      expect(radius(d)).toBeGreaterThan(10.5);
     }
-    expect(solidFilled(container).filter((d) => d.getAttribute('data-group') !== 'overlay')).toHaveLength(3);
+  });
+
+  // Mockup check 3: R/3/5 are faint chord tones in the chord colour; only 2 and 6 are overlay dots.
+  it('only 2 and 6 of the pentatonic show over chord tones', () => {
+    const { container } = openChanges();
+    next(); // B (tile 2 → --k1)
+    fireEvent.click(pentaSwitch());
+    const faint = faintDots(container);
+    expect(new Set(faint.map(label))).toEqual(new Set(['R', '3', '5']));
+    for (const d of faint) {
+      expect(d.querySelector('circle')!.getAttribute('stroke')).toBe('var(--k1)');
+      expect(opacity(d)).toBeCloseTo(0.4);
+    }
+    expect(new Set(overlayDots(container).map(label))).toEqual(new Set(['2', '6']));
+    for (const d of overlayDots(container)) {
+      expect(d.querySelector('circle')!.getAttribute('stroke')).toBe('var(--muted)');
+      expect(opacity(d)).toBeCloseTo(0.5);
+      expect(radius(d)).toBe(9);
+      expect(strokeWidth(d)).toBe(2);
+    }
+    // One dot per cell: no overlay dot hides under a chord tone.
+    expect(new Set(dots(container).map(cell)).size).toBe(dots(container).length);
   });
 
   it('the chord scale names its mode', () => {
@@ -905,17 +946,23 @@ describe('TriadsExplorer — soloing overlays', () => {
     expect(isOn(scaleSwitch())).toBe(true);
     const triadCells = new Set(triadDots(container).map(cell));
     expect(overlayMap(container)).toEqual(expectedOverlay(9, [0, 2, 3, 5, 7, 9, 10], triadCells));
-    const roots = overlayDots(container).filter((d) => label(d) === 'R');
-    expect(roots.length).toBeGreaterThan(0);
-    for (const d of roots) {
-      expect(fillOf(d)).toBe('var(--k2)');
-      expect(opacity(d)).toBeGreaterThan(opacity(overlayDots(container).find((x) => label(x) !== 'R')!));
-    }
     cleanup();
     openChanges('en');
     fireEvent.change(screen.getByLabelText<HTMLSelectElement>('Songs'), { target: { value: 'wishYouWereHere' } });
     pickTile(2, 'Progression');
     expect(text(buttons('Neck')[1])).toBe('scale: A Dorian');
+  });
+
+  // Mockup check 4: the chord scale uses the pentatonic's values.
+  it('scale overlay uses the same look', () => {
+    const { container } = openChanges();
+    tonesOff();
+    fireEvent.change(songSelect(), { target: { value: 'wishYouWereHere' } }); // C D Am G in G
+    pickTile(2); // Am → --k2
+    fireEvent.click(scaleSwitch());
+    const triadCells = new Set(triadDots(container).map(cell));
+    expect(overlayMap(container)).toEqual(expectedOverlay(9, [0, 2, 3, 5, 7, 9, 10], triadCells));
+    expectOverlayLook(container, 'var(--k2)');
   });
 
   it('chords outside the key get Mixolydian or Dorian', () => {
