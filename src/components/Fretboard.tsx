@@ -1,3 +1,4 @@
+import { useState } from 'preact/hooks';
 import { TUNING } from '../lib/music/notes';
 
 export interface FretDot {
@@ -21,6 +22,10 @@ export interface FretDot {
   radius?: number;
   /** Explicit dot opacity (a soloing overlay); wins over `dimmed` and `dimmedGroups`. */
   opacity?: number;
+  /** Clickable when the board has `onDotClick`: a hit circle, pointer cursor and hover highlight. */
+  clickable?: boolean;
+  /** Outline width; defaults to 1.4 with `radius`, else 2.5. */
+  stroke?: number;
 }
 export interface FretBand {
   from: number;
@@ -65,6 +70,11 @@ export interface FretboardProps {
   onFretClick?: (fret: number) => void;
   /** Makes band labels clickable; receives the band's `group`. */
   onBandClick?: (group: string) => void;
+  /**
+   * Makes each `clickable` dot clickable, pointer-only: its hit circle is
+   * `aria-hidden` and outside the tab order. Receives the dot's string and fret.
+   */
+  onDotClick?: (string: number, fret: number) => void;
 }
 
 const MARKERS = [3, 5, 7, 9, 12, 15];
@@ -253,7 +263,9 @@ export function Fretboard({
   ariaLabel,
   onFretClick,
   onBandClick,
+  onDotClick,
 }: FretboardProps) {
+  const [hovered, setHovered] = useState<string | null>(null);
   const g = geometry(orientation, frets);
   const vertical = orientation === 'vertical';
   const mid = (g.stringAt(0) + g.stringAt(STRINGS - 1)) / 2;
@@ -460,6 +472,10 @@ export function Fretboard({
           const multi = d.colors !== undefined && d.colors.length > 1;
           const split = d.variant === 'filled' && multi;
           const arcs = d.variant === 'dashed' && multi;
+          const r = d.radius ?? DOT_R;
+          const click = onDotClick && d.clickable;
+          // Hover is keyed by cell, so a redraw with new dots keeps it on the cell under the pointer.
+          const cell = `${d.string}:${d.fret}`;
           return (
             <g
               key={`d${i}`}
@@ -469,6 +485,17 @@ export function Fretboard({
               data-fret={d.fret}
               opacity={d.opacity ?? (d.dimmed ? DOT_DIM : opacityFor(d.group, dimmedGroups))}
               pointer-events={passThrough}
+              style={click ? { cursor: 'pointer' } : undefined}
+              onClick={
+                click
+                  ? (e: MouseEvent) => {
+                      e.stopPropagation();
+                      onDotClick(d.string, d.fret);
+                    }
+                  : undefined
+              }
+              onMouseEnter={click ? () => setHovered(cell) : undefined}
+              onMouseLeave={click ? () => setHovered((h) => (h === cell ? null : h)) : undefined}
             >
               {split ? (
                 d.colors!.map((c, k) => (
@@ -493,10 +520,10 @@ export function Fretboard({
                 <circle
                   cx={x}
                   cy={y}
-                  r={d.radius ?? DOT_R}
+                  r={r}
                   fill={d.variant === 'filled' && d.colors?.length === 1 ? d.colors[0] : fill}
                   stroke={d.color}
-                  stroke-width={d.radius != null ? 1.4 : 2.5}
+                  stroke-width={d.stroke ?? (d.radius != null ? 1.4 : 2.5)}
                   stroke-dasharray={d.variant === 'dashed' ? '3 2' : undefined}
                 />
               )}
@@ -521,6 +548,31 @@ export function Fretboard({
               >
                 {d.label}
               </text>
+              {click && hovered === cell && (
+                <circle
+                  data-role="dot-highlight"
+                  cx={x}
+                  cy={y}
+                  r={r}
+                  fill="none"
+                  stroke="var(--focus)"
+                  stroke-width={2.5}
+                  pointer-events="none"
+                />
+              )}
+              {click && (
+                // Invisible hit area, drawn last so it sits over the face and label.
+                <circle
+                  data-role="dot-hit"
+                  cx={x}
+                  cy={y}
+                  r={RING_R}
+                  fill="transparent"
+                  aria-hidden="true"
+                  pointer-events="all"
+                  style={{ cursor: 'pointer' }}
+                />
+              )}
             </g>
           );
         })}
