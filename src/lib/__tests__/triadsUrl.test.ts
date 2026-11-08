@@ -7,7 +7,7 @@ describe('triadsUrl', () => {
     expect(DEFAULT_STATE).toEqual({
       mode: 'inversions',
       inversions: { root: 0, quality: 'major', set: 'all', index: 0 },
-      changes: { src: 'G B C Cm', key: 7, set: 'GBe', start: 0, overlay: 'none' },
+      changes: { src: 'G B C Cm', key: 7, set: 'GBe', at: 0, start: 0, overlay: 'none', tones: true },
     });
     const { root, quality, set, index } = DEFAULT_INVERSIONS;
     expect(DEFAULT_STATE.inversions).toEqual({ root, quality, set, index });
@@ -15,7 +15,9 @@ describe('triadsUrl', () => {
       src: DEFAULT_CHANGES.src,
       key: DEFAULT_CHANGES.key,
       set: DEFAULT_CHANGES.set,
-      start: DEFAULT_CHANGES.start,
+      at: DEFAULT_CHANGES.anchor.at,
+      start: DEFAULT_CHANGES.anchor.start,
+      tones: DEFAULT_CHANGES.tones,
     });
   });
 
@@ -30,7 +32,7 @@ describe('triadsUrl', () => {
     expect(readTriadsQuery('?mode=changes&prog=C+G+Am+F&set=DGB&key=0&start=1&overlay=penta')).toEqual({
       ...DEFAULT_STATE,
       mode: 'changes',
-      changes: { src: 'C G Am F', key: 0, set: 'DGB', start: 1, overlay: 'penta' },
+      changes: { src: 'C G Am F', key: 0, set: 'DGB', at: 0, start: 1, overlay: 'penta', tones: true },
     });
     expect(readTriadsQuery('mode=changes&overlay=scale').changes.overlay).toBe('scale');
 
@@ -95,10 +97,38 @@ describe('triadsUrl', () => {
       {
         mode: 'changes',
         inversions: { root: 4, quality: 'minor', set: 'all', index: 1 },
-        changes: { src: 'Em C G D', key: 7, set: 'ADG', start: 3, overlay: 'penta' },
+        changes: { src: 'Em C G D', key: 7, set: 'ADG', at: 2, start: 3, overlay: 'penta', tones: false },
       },
       { ...DEFAULT_STATE, mode: 'changes', changes: { ...DEFAULT_STATE.changes, src: '1 5 6m 4 & ?' } },
     ];
     for (const s of states) expect(readTriadsQuery(writeTriadsQuery(s))).toEqual(s);
+  });
+
+  it('round-trips the Anchor as at and start', () => {
+    const s: TriadsState = { ...DEFAULT_STATE, mode: 'changes', changes: { ...DEFAULT_STATE.changes, at: 2, start: 3 } };
+    const query = writeTriadsQuery(s);
+    expect(query).toBe('?mode=changes&at=2&start=3');
+    expect(readTriadsQuery(query)).toEqual(s);
+  });
+
+  it('a start-only link anchors on chord 1', () => {
+    const { changes } = readTriadsQuery('?mode=changes&start=1');
+    expect(changes.at).toBe(0);
+    expect(changes.start).toBe(1);
+  });
+
+  it('round-trips tones=off and omits the default', () => {
+    const off: TriadsState = { ...DEFAULT_STATE, mode: 'changes', changes: { ...DEFAULT_STATE.changes, tones: false } };
+    expect(writeTriadsQuery(off)).toBe('?mode=changes&tones=off');
+    expect(readTriadsQuery(writeTriadsQuery(off)).changes.tones).toBe(false);
+    const on: TriadsState = { ...DEFAULT_STATE, mode: 'changes', changes: { ...DEFAULT_STATE.changes, tones: true } };
+    expect(writeTriadsQuery(on)).toBe('?mode=changes');
+  });
+
+  it('falls back to defaults for bad at and tones', () => {
+    for (const q of ['?at=-1', '?at=x', '?tones=maybe', '?at=1.5&tones=', '?at=-1&tones=maybe']) {
+      expect(() => readTriadsQuery(q)).not.toThrow();
+      expect(readTriadsQuery(q)).toEqual(DEFAULT_STATE);
+    }
   });
 });

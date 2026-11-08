@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   STRING_SETS,
+  anchorForClick,
+  anchoredPath,
   chordPentatonic,
   chordScale,
+  nextWithNote,
   rungOrder,
   triadName,
-  triadPath,
   triads,
   type PathChord,
   type StringSet,
@@ -13,6 +15,8 @@ import {
   type Triad,
 } from '../triads';
 import { TUNING } from '../notes';
+import { parseProgression } from '../progression';
+import { SONG_PRESETS } from '../songPresets';
 
 const C = 0;
 const G = 7;
@@ -127,6 +131,48 @@ describe('rungOrder', () => {
   });
 });
 
+describe('nextWithNote', () => {
+  const G5 = { string: 2, fret: 5 };
+
+  it('nextWithNote cycles the three C Triads through G/5 in Rung order', () => {
+    const order = rungOrder(C, 'major', STRING_SETS);
+    const seen: number[] = [];
+    let cur = 0;
+    for (let i = 0; i < 4; i++) {
+      cur = nextWithNote(order, cur, G5)!;
+      seen.push(cur);
+    }
+    expect(seen).toEqual([5, 6, 7, 5]);
+    expect(seen.map((k) => `${order[k].set.id} ${frets(order[k])}`)).toEqual([
+      'ADG 7-5-5',
+      'DGB 5-5-5',
+      'GBe 5-5-3',
+      'ADG 7-5-5',
+    ]);
+  });
+
+  it('nextWithNote starts after the current Triad', () => {
+    const order = rungOrder(C, 'major', STRING_SETS);
+    expect(`${order[5].set.id} ${frets(order[5])}`).toBe('ADG 7-5-5');
+    expect(nextWithNote(order, 5, G5)).toBe(6);
+  });
+
+  it('nextWithNote returns the current Triad when it is the only match', () => {
+    const order = rungOrder(C, 'major', [set('GBe')]);
+    const only = order.findIndex((t) => frets(t) === '5-5-3');
+    expect(only).toBeGreaterThanOrEqual(0);
+    expect(nextWithNote(order, only, G5)).toBe(only);
+  });
+
+  it('nextWithNote returns null when no Triad contains the note', () => {
+    const order = rungOrder(C, 'major', STRING_SETS);
+    // G string fret 1 is G#, not a C major tone.
+    expect(nextWithNote(order, 0, { string: 2, fret: 1 })).toBeNull();
+    // The low E string is not on any set but E-A-D; a string outside the chosen sets never matches.
+    expect(nextWithNote(rungOrder(C, 'major', [set('GBe')]), 0, { string: 5, fret: 3 })).toBeNull();
+  });
+});
+
 describe('triadName', () => {
   it('triadName spells slash chords and minor bass notes from the relative major', () => {
     const gm = triads(G, 'minor', set('GBe')).find((t) => t.inversion === 1)!;
@@ -145,9 +191,40 @@ const min = (root: number): PathChord => ({ root, quality: 'minor' });
 const dist = (a: Triad, b: Triad) => a.frets.reduce((acc, f, i) => acc + Math.abs(f - b.frets[i]), 0);
 const fretSum = (t: Triad) => t.frets[0] + t.frets[1] + t.frets[2];
 
-describe('triadPath', () => {
-  it('triadPath starts Creep on G-B-e at G/B 4-3-3 then B 4-4-2', () => {
-    const path = triadPath([maj(G), maj(B), maj(C), min(C)], set('GBe'), 0);
+/** Frozen copy of the pre-Anchor `triadPath` (first chord at `start`, nearest Triads forward). */
+function legacyPath(chords: readonly PathChord[], s: StringSet, start: number): Triad[] {
+  if (chords.length === 0) return [];
+  const first = triads(chords[0].root, chords[0].quality, s);
+  if (first.length === 0) return [];
+  const path: Triad[] = [first[((start % first.length) + first.length) % first.length]];
+  for (const chord of chords.slice(1)) {
+    const prev = path[path.length - 1];
+    let best: Triad | undefined;
+    for (const t of triads(chord.root, chord.quality, s)) if (!best || dist(t, prev) < dist(best, prev)) best = t;
+    if (!best) break;
+    path.push(best);
+  }
+  return path;
+}
+
+describe('anchoredPath', () => {
+  const creep = [maj(G), maj(B), maj(C), min(C)];
+
+  it('anchoredPath at chord 1 matches triadPath for all presets and sets', () => {
+    for (const preset of SONG_PRESETS) {
+      const r = parseProgression(preset.src, C);
+      if (!r.ok) throw new Error(`preset ${preset.id} does not parse`);
+      for (const s of STRING_SETS) {
+        for (let k = 0; k <= 3; k++) {
+          const expected = legacyPath(r.chords, s, k).map(frets);
+          expect(anchoredPath(r.chords, s, { at: 0, start: k }).map(frets)).toEqual(expected);
+        }
+      }
+    }
+  });
+
+  it('anchoredPath starts Creep on G-B-e at G/B 4-3-3 then B 4-4-2', () => {
+    const path = anchoredPath(creep, set('GBe'), { at: 0, start: 0 });
     expect(path).toHaveLength(4);
     expect(`${triadName(path[0])} ${frets(path[0])}`).toBe('G/B 4-3-3');
     expect(`${triadName(path[1])} ${frets(path[1])}`).toBe('B 4-4-2');
@@ -155,35 +232,108 @@ describe('triadPath', () => {
     expect(path[3].quality).toBe('minor');
   });
 
-  it('triadPath picks the nearest Triad and breaks ties low', () => {
-    let ties = 0;
+  it('anchoredPath builds backward from a middle Anchor (Creep, C 12-13-12)', () => {
+    const path = anchoredPath(creep, set('GBe'), { at: 2, start: 3 });
+    expect(path.map(frets)).toEqual(['12-12-10', '11-12-11', '12-13-12', '12-13-11']);
+    expect(path.map((t) => t.root)).toEqual([G, B, C, C]);
+  });
+
+  it('anchoredPath on A-D-G from C 7-5-5', () => {
+    const path = anchoredPath(creep, set('ADG'), { at: 2, start: 1 });
+    expect(path.map(frets)).toEqual(['5-5-4', '6-4-4', '7-5-5', '6-5-5']);
+  });
+
+  it('anchoredPath wraps at and start', () => {
+    const s = set('GBe');
+    const n = triads(C, 'major', s).length;
+    const base = anchoredPath(creep, s, { at: 2, start: 1 }).map(frets);
+    expect(anchoredPath(creep, s, { at: 2 + creep.length, start: 1 }).map(frets)).toEqual(base);
+    expect(anchoredPath(creep, s, { at: 2, start: 1 + n }).map(frets)).toEqual(base);
+    expect(anchoredPath(creep, s, { at: 2 + 2 * creep.length, start: 1 + 2 * n }).map(frets)).toEqual(base);
+  });
+
+  it('anchoredPath breaks ties to the lower fret sum in both directions', () => {
+    let forwardTies = 0;
+    let backwardTies = 0;
     for (const s of STRING_SETS) {
       for (let r1 = 0; r1 < 12; r1++) {
         for (let r2 = 0; r2 < 12; r2++) {
           for (const q of ['major', 'minor'] as const) {
             const chords: PathChord[] = [maj(r1), { root: r2, quality: q }];
-            for (let start = 0; start < triads(r1, 'major', s).length; start++) {
-              const [first, next] = triadPath(chords, s, start);
-              expect(first).toEqual(triads(r1, 'major', s)[start]);
-              const candidates = triads(r2, q, s);
-              const best = Math.min(...candidates.map((c) => dist(c, first)));
-              const tied = candidates.filter((c) => dist(c, first) === best);
-              if (tied.length > 1) ties++;
-              expect(dist(next, first)).toBe(best);
+            const firsts = triads(r1, 'major', s);
+            const seconds = triads(r2, q, s);
+            // Forward: Anchor on chord 1, chord 2 is the nearest to it.
+            for (let k = 0; k < firsts.length; k++) {
+              const [a, next] = anchoredPath(chords, s, { at: 0, start: k });
+              expect(a).toEqual(firsts[k]);
+              const best = Math.min(...seconds.map((c) => dist(c, a)));
+              const tied = seconds.filter((c) => dist(c, a) === best);
+              if (tied.length > 1) forwardTies++;
+              expect(dist(next, a)).toBe(best);
               expect(fretSum(next)).toBe(Math.min(...tied.map(fretSum)));
+            }
+            // Backward: Anchor on chord 2, chord 1 is the nearest to it.
+            for (let k = 0; k < seconds.length; k++) {
+              const [prev, a] = anchoredPath(chords, s, { at: 1, start: k });
+              expect(a).toEqual(seconds[k]);
+              const best = Math.min(...firsts.map((c) => dist(c, a)));
+              const tied = firsts.filter((c) => dist(c, a) === best);
+              if (tied.length > 1) backwardTies++;
+              expect(dist(prev, a)).toBe(best);
+              expect(fretSum(prev)).toBe(Math.min(...tied.map(fretSum)));
             }
           }
         }
       }
     }
-    expect(ties).toBeGreaterThan(0);
+    expect(forwardTies).toBeGreaterThan(0);
+    expect(backwardTies).toBeGreaterThan(0);
+  });
+});
+
+describe('anchorForClick', () => {
+  const triadAt = (chord: PathChord, id: StringSetId, f: string) =>
+    triads(chord.root, chord.quality, set(id)).find((t) => frets(t) === f)!;
+  const picked = (chord: PathChord, r: { set: StringSetId; start: number } | null) =>
+    r && `${r.set} ${frets(triads(chord.root, chord.quality, set(r.set))[r.start])}`;
+
+  it('anchorForClick stays on the current set when it holds the note', () => {
+    const r = anchorForClick(maj(C), 'GBe', triadAt(maj(C), 'GBe', '5-5-3'), { string: 1, fret: 13 });
+    expect(r).toEqual({ set: 'GBe', start: 3 });
+    expect(picked(maj(C), r)).toBe('GBe 12-13-12');
   });
 
-  it('triadPath wraps the start index', () => {
-    const chords = [maj(G), maj(B), maj(C), min(C)];
-    const n = triads(G, 'major', set('GBe')).length;
-    expect(triadPath(chords, set('GBe'), n).map(frets)).toEqual(triadPath(chords, set('GBe'), 0).map(frets));
-    expect(triadPath(chords, set('GBe'), n + 1).map(frets)).toEqual(triadPath(chords, set('GBe'), 1).map(frets));
+  it('anchorForClick on the current Triad moves to the next set with that string', () => {
+    const r = anchorForClick(maj(C), 'GBe', triadAt(maj(C), 'GBe', '5-5-3'), { string: 2, fret: 5 });
+    expect(r).toEqual({ set: 'ADG', start: 1 });
+    expect(picked(maj(C), r)).toBe('ADG 7-5-5');
+  });
+
+  it('anchorForClick cycles the sets on repeated clicks', () => {
+    const cell = { string: 2, fret: 5 };
+    let id: StringSetId = 'ADG';
+    let cur = triadAt(maj(C), 'ADG', '7-5-5');
+    const seen: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      const r: { set: StringSetId; start: number } = anchorForClick(maj(C), id, cur, cell)!;
+      seen.push(picked(maj(C), r)!);
+      id = r.set;
+      cur = triads(C, 'major', set(id))[r.start];
+    }
+    expect(seen).toEqual(['DGB 5-5-5', 'GBe 5-5-3', 'ADG 7-5-5']);
+  });
+
+  it('anchorForClick picks the lowest set for a string outside the current set', () => {
+    const cur = triads(G, 'major', set('GBe'))[0];
+    const r = anchorForClick(maj(G), 'GBe', cur, { string: 4, fret: 10 });
+    expect(r?.set).toBe('EAD');
+    expect(picked(maj(G), r)).toBe('EAD 10-10-9');
+  });
+
+  it('anchorForClick returns null when no Triad contains the note', () => {
+    const cur = triadAt(maj(C), 'GBe', '5-5-3');
+    // G string fret 1 is G#, not a C major tone.
+    expect(anchorForClick(maj(C), 'GBe', cur, { string: 2, fret: 1 })).toBeNull();
   });
 });
 

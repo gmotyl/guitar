@@ -813,3 +813,127 @@ describe('Fretboard Triad paths', () => {
     expect(empty.container.innerHTML).toBe(html);
   });
 });
+
+describe('Fretboard clickable dots', () => {
+  const clickDots: FretDot[] = [
+    { string: 3, fret: 5, label: 'R', color: 'var(--c)', variant: 'filled', clickable: true },
+    { string: 2, fret: 5, label: '3', color: 'var(--c)', variant: 'outline', radius: 9, clickable: true },
+    { string: 1, fret: 3, label: '5', color: 'var(--c)', variant: 'filled' },
+  ];
+  const dotAt = (c: Element, s: number, f: number) =>
+    c.querySelector(`[data-role="dot"][data-string="${s}"][data-fret="${f}"]`)!;
+
+  it('onDotClick fires with string and fret for a clickable dot', () => {
+    for (const orientation of ['horizontal', 'vertical'] as const) {
+      const onDotClick = vi.fn();
+      const { container, unmount } = render(
+        <Fretboard orientation={orientation} dots={clickDots} ariaLabel="b" onDotClick={onDotClick} />,
+      );
+      fireEvent.click(dotAt(container, 3, 5).querySelector('circle')!);
+      expect(onDotClick).toHaveBeenCalledTimes(1);
+      expect(onDotClick).toHaveBeenCalledWith(3, 5);
+      unmount();
+    }
+  });
+
+  it('onDotClick fires on the hit circle around a small dot', () => {
+    const onDotClick = vi.fn();
+    const { container } = render(
+      <Fretboard orientation="horizontal" dots={clickDots} ariaLabel="b" onDotClick={onDotClick} onFretClick={() => {}} />,
+    );
+    const dot = dotAt(container, 2, 5);
+    const hit = dot.querySelector('[data-role="dot-hit"]')!;
+    expect(num(hit, 'r')).toBe(14);
+    const face = dot.querySelector('circle')!;
+    expect(num(hit, 'cx')).toBe(num(face, 'cx'));
+    expect(num(hit, 'cy')).toBe(num(face, 'cy'));
+    // The hit circle catches the pointer even when the dot passes it through to the fret columns.
+    expect(hit.getAttribute('pointer-events')).toBe('all');
+    fireEvent.click(hit);
+    expect(onDotClick).toHaveBeenCalledTimes(1);
+    expect(onDotClick).toHaveBeenCalledWith(2, 5);
+  });
+
+  it('dots without clickable ignore clicks', () => {
+    const onDotClick = vi.fn();
+    const { container } = render(<Fretboard orientation="horizontal" dots={clickDots} ariaLabel="b" onDotClick={onDotClick} />);
+    const dot = dotAt(container, 1, 3);
+    expect(dot.querySelector('[data-role="dot-hit"]')).toBeNull();
+    fireEvent.click(dot.querySelector('circle')!);
+    fireEvent.click(dot);
+    expect(onDotClick).not.toHaveBeenCalled();
+  });
+
+  it('clickable dot highlights under the pointer', () => {
+    const { container } = render(
+      <Fretboard orientation="horizontal" dots={clickDots} ariaLabel="b" onDotClick={() => {}} />,
+    );
+    const a = dotAt(container, 3, 5);
+    expect((a as SVGElement).style.cursor).toBe('pointer');
+    expect((a.querySelector('[data-role="dot-hit"]') as SVGElement).style.cursor).toBe('pointer');
+    expect(all(container, 'dot-highlight')).toHaveLength(0);
+    fireEvent.mouseEnter(a);
+    let hl = all(container, 'dot-highlight');
+    expect(hl).toHaveLength(1);
+    expect(a.contains(hl[0])).toBe(true);
+    fireEvent.mouseLeave(a);
+    fireEvent.mouseEnter(dotAt(container, 2, 5));
+    hl = all(container, 'dot-highlight');
+    expect(hl).toHaveLength(1);
+    expect(dotAt(container, 2, 5).contains(hl[0])).toBe(true);
+    expect(num(hl[0], 'r')).toBe(9);
+    fireEvent.mouseLeave(dotAt(container, 2, 5));
+    expect(all(container, 'dot-highlight')).toHaveLength(0);
+    // A dot without clickable never highlights and keeps the default cursor.
+    const plain = dotAt(container, 1, 3);
+    fireEvent.mouseEnter(plain);
+    expect(all(container, 'dot-highlight')).toHaveLength(0);
+    expect((plain as SVGElement).style.cursor).toBe('');
+  });
+
+  it('hit circles are aria-hidden and not focusable', () => {
+    const { container } = render(
+      <Fretboard orientation="horizontal" dots={clickDots} ariaLabel="b" onDotClick={() => {}} />,
+    );
+    const hits = all(container, 'dot-hit');
+    expect(hits).toHaveLength(2);
+    for (const h of hits) {
+      expect(h.getAttribute('aria-hidden')).toBe('true');
+      expect(h.hasAttribute('tabindex')).toBe(false);
+    }
+    expect(container.querySelector('[tabindex]')).toBeNull();
+  });
+
+  it('stroke sets the outline width', () => {
+    const base: FretDot = { string: 2, fret: 5, label: '3', color: 'var(--c)', variant: 'outline' };
+    const width = (d: FretDot) => {
+      const { container, unmount } = render(<Fretboard orientation="horizontal" dots={[d]} ariaLabel="b" />);
+      const w = container.querySelector('[data-role="dot"] circle')!.getAttribute('stroke-width');
+      unmount();
+      return Number(w);
+    };
+    expect(width({ ...base, radius: 9, stroke: 2 })).toBe(2);
+    expect(width({ ...base, radius: 9 })).toBe(1.4);
+    expect(width(base)).toBe(2.5);
+    expect(width({ ...base, stroke: 3 })).toBe(3);
+  });
+
+  it('boards without onDotClick are unchanged', () => {
+    const snap = readFileSync(join(process.cwd(), 'src/components/__tests__/__snapshots__/Fretboard.test.tsx.snap'), 'utf8');
+    const stored = (name: string) => {
+      const m = snap.match(new RegExp('exports\\[`' + name + '`\\] = `"([\\s\\S]*?)"`;'));
+      expect(m, name).not.toBeNull();
+      return m![1];
+    };
+    // `clickable` alone, without a handler, changes nothing.
+    const flagged = dots.map((d) => ({ ...d, clickable: true }));
+    for (const orientation of ['horizontal', 'vertical'] as const) {
+      const caged = render(
+        <Fretboard orientation={orientation} dots={flagged} bands={bands} dimmedGroups={['A']} ariaLabel="CAGED C" />,
+      );
+      expect(caged.container.innerHTML).toBe(stored(`Fretboard > Fretboard: existing props render unchanged > ${orientation} 1`));
+      expect(all(caged.container, 'dot-hit')).toHaveLength(0);
+      caged.unmount();
+    }
+  });
+});

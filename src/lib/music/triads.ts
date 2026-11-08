@@ -88,6 +88,25 @@ export function rungOrder(root: PitchClass, quality: TriadQuality, sets: readonl
   return out;
 }
 
+/** A fretboard cell; string 0 = high e, as FretDot. */
+export type Cell = { string: number; fret: number };
+
+/** Whether the Triad plays `cell` (one of its three strings at that fret). */
+const holds = (t: Triad, cell: Cell) => t.set.strings.some((si, i) => si === cell.string && t.frets[i] === cell.fret);
+
+/**
+ * The first index after `cur` in `order` (wrapping, `cur` itself last) whose Triad contains
+ * `cell`; null when none does.
+ */
+export function nextWithNote(order: readonly RungTriad[], cur: number, cell: Cell): number | null {
+  const n = order.length;
+  for (let step = 1; step <= n; step++) {
+    const k = (((cur + step) % n) + n) % n;
+    if (holds(order[k], cell)) return k;
+  }
+  return null;
+}
+
 /**
  * Chord symbol with a slash bass for inversions, e.g. 'C/G', 'Gm/B♭'. The root is spelled in the
  * chord's own key (a minor chord's relative major) unless `rootName` gives it (Chord changes
@@ -111,26 +130,70 @@ export interface PathChord {
 
 const wrap = (n: number, m: number) => ((n % m) + m) % m;
 
+/** The chord of the progression (`at`) and its Triad (`start`, index into `triads(chord, set)`) that pin the Triad path. */
+export type Anchor = { at: number; start: number };
+
+/** The chord's Triad with the least summed |fret difference| to `to`, ties to the lower fret sum. */
+function nearest(chord: PathChord, set: StringSet, to: Triad): Triad | undefined {
+  const dist = (t: Triad) => t.frets.reduce((acc, f, i) => acc + Math.abs(f - to.frets[i]), 0);
+  // Candidates are sorted by fret sum, so a strict `<` keeps the lower one on ties.
+  let best: Triad | undefined;
+  for (const t of triads(chord.root, chord.quality, set)) if (!best || dist(t) < dist(best)) best = t;
+  return best;
+}
+
 /**
- * A Triad path on one String set: Triad 0 = the first chord's Triad at `start mod n`; each next
- * Triad is the next chord's Triad with the least summed |fret difference| to the previous one,
- * ties to the lower fret sum.
+ * A Triad path on one String set built outward from the Anchor: the Anchor chord's Triad at
+ * `start` (both `at` and `start` wrapped into range); every later chord takes its nearest Triad
+ * to the previous one, every earlier chord its nearest Triad to the next one.
  */
-export function triadPath(chords: readonly PathChord[], set: StringSet, start: number): Triad[] {
+export function anchoredPath(chords: readonly PathChord[], set: StringSet, anchor: Anchor): Triad[] {
   if (chords.length === 0) return [];
-  const first = triads(chords[0].root, chords[0].quality, set);
-  if (first.length === 0) return [];
-  const path: Triad[] = [first[wrap(start, first.length)]];
-  for (const chord of chords.slice(1)) {
-    const prev = path[path.length - 1];
-    const dist = (t: Triad) => t.frets.reduce((acc, f, i) => acc + Math.abs(f - prev.frets[i]), 0);
-    // Candidates are sorted by fret sum, so a strict `<` keeps the lower one on ties.
-    let best: Triad | undefined;
-    for (const t of triads(chord.root, chord.quality, set)) if (!best || dist(t) < dist(best)) best = t;
+  const at = wrap(anchor.at, chords.length);
+  const own = triads(chords[at].root, chords[at].quality, set);
+  if (own.length === 0) return [];
+  const path: Triad[] = new Array(chords.length);
+  path[at] = own[wrap(anchor.start, own.length)];
+  let hi = at;
+  while (hi + 1 < chords.length) {
+    const best = nearest(chords[hi + 1], set, path[hi]);
     if (!best) break;
-    path.push(best);
+    path[++hi] = best;
   }
-  return path;
+  let lo = at;
+  while (lo > 0) {
+    const best = nearest(chords[lo - 1], set, path[lo]);
+    if (!best) break;
+    path[--lo] = best;
+  }
+  return path.slice(lo, hi + 1);
+}
+
+/**
+ * Which String set and Triad of `chord` a click on `cell` anchors. Candidates = String sets
+ * holding `cell.string`, low to high, with a Triad of `chord` containing `cell`. A click on the
+ * current Triad `cur` moves to the next candidate after `set` (wrapping, `set` itself when it is
+ * the only one); any other click stays on `set` when it is a candidate, else takes the first
+ * candidate. `start` indexes `triads(chord, set)`; null when there is no candidate.
+ */
+export function anchorForClick(
+  chord: PathChord,
+  set: StringSetId,
+  cur: Triad,
+  cell: Cell,
+): { set: StringSetId; start: number } | null {
+  const candidates: { set: StringSetId; start: number; pos: number }[] = [];
+  STRING_SETS.forEach((s, pos) => {
+    if (!s.strings.includes(cell.string)) return;
+    const start = triads(chord.root, chord.quality, s).findIndex((t) => holds(t, cell));
+    if (start >= 0) candidates.push({ set: s.id, start, pos });
+  });
+  if (candidates.length === 0) return null;
+  const pos = STRING_SETS.findIndex((s) => s.id === set);
+  const pick = holds(cur, cell)
+    ? (candidates.find((c) => c.pos > pos) ?? candidates[0])
+    : (candidates.find((c) => c.set === set) ?? candidates[0]);
+  return { set: pick.set, start: pick.start };
 }
 
 export interface ScaleNote {

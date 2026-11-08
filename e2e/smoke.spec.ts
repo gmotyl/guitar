@@ -386,3 +386,54 @@ test('triads page on a phone in portrait', async ({ browser }) => {
   expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
   await context.close();
 });
+
+/** The clickable dot at string `s` (0 = high e) and fret `f` on the given triads board. */
+const triadDot = (page: Page, board: '.board--h' | '.board--v', s: number, f: number) =>
+  page.locator(`${board} [data-role="dot"][data-string="${s}"][data-fret="${f}"]`).first();
+
+test('triads: clicking a note cycles its Triads', async ({ browser }) => {
+  const { context, page } = await open(browser, { locale: 'pl-PL', viewport: { width: 1280, height: 900 } });
+  await page.goto('/pl/triads');
+  const count = page.locator('.stepper .count');
+  await expect(count).toHaveText('1 / 16');
+  // String G (index 2) fret 5: each click moves to the next Triad that holds that note.
+  for (const expected of ['6 / 16', '7 / 16', '8 / 16']) {
+    await clickCentre(page, triadDot(page, '.board--h', 2, 5));
+    await expect(count).toHaveText(expected);
+  }
+  await context.close();
+});
+
+test('triads: clicking a faint tone anchors the path', async ({ browser }) => {
+  const { context, page } = await open(browser, { locale: 'pl-PL', viewport: { width: 1280, height: 900 } });
+  await page.goto('/pl/triads');
+  await page.getByRole('group', { name: 'Tryb', exact: true }).getByRole('button', { name: 'Zmiany akordów' }).click();
+  await expect(triadTiles(page)).toHaveText(['G', 'B', 'C', 'Cm']);
+  const tiles = page.getByRole('group', { name: 'Progresja', exact: true }).getByRole('button');
+  await tiles.nth(2).click();
+  await expect(tiles.nth(2)).toHaveAttribute('aria-pressed', 'true');
+  // The faint C on string B (index 1) fret 13 anchors the Triad path there.
+  await clickCentre(page, triadDot(page, '.board--h', 1, 13));
+  await expect(page).toHaveURL(/[?&]at=2(&|$)/);
+  await expect(page).toHaveURL(/[?&]start=3(&|$)/);
+  await context.close();
+});
+
+test('triads: tapping a note on a phone', async ({ browser }) => {
+  const { context, page } = await open(browser, {
+    locale: 'pl-PL',
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+    isMobile: true,
+  });
+  await page.goto('/pl/triads');
+  const count = page.locator('.stepper .count');
+  await expect(count).toHaveText('1 / 16');
+  const dot = triadDot(page, '.board--v', 2, 5);
+  await dot.scrollIntoViewIfNeeded();
+  const box = await dot.boundingBox();
+  if (!box) throw new Error('dot has no bounding box');
+  await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
+  await expect(count).toHaveText('6 / 16');
+  await context.close();
+});
