@@ -88,6 +88,25 @@ export function rungOrder(root: PitchClass, quality: TriadQuality, sets: readonl
   return out;
 }
 
+/** A fretboard cell; string 0 = high e, as FretDot. */
+export type Cell = { string: number; fret: number };
+
+/** Whether the Triad plays `cell` (one of its three strings at that fret). */
+const holds = (t: Triad, cell: Cell) => t.set.strings.some((si, i) => si === cell.string && t.frets[i] === cell.fret);
+
+/**
+ * The first index after `cur` in `order` (wrapping, `cur` itself last) whose Triad contains
+ * `cell`; null when none does.
+ */
+export function nextWithNote(order: readonly RungTriad[], cur: number, cell: Cell): number | null {
+  const n = order.length;
+  for (let step = 1; step <= n; step++) {
+    const k = (((cur + step) % n) + n) % n;
+    if (holds(order[k], cell)) return k;
+  }
+  return null;
+}
+
 /**
  * Chord symbol with a slash bass for inversions, e.g. 'C/G', 'Gm/B♭'. The root is spelled in the
  * chord's own key (a minor chord's relative major) unless `rootName` gives it (Chord changes

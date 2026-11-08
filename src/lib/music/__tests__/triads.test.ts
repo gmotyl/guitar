@@ -3,6 +3,7 @@ import {
   STRING_SETS,
   chordPentatonic,
   chordScale,
+  nextWithNote,
   rungOrder,
   triadName,
   triadPath,
@@ -124,6 +125,48 @@ describe('rungOrder', () => {
       }
     }
     expect(checked).toBe(true);
+  });
+});
+
+describe('nextWithNote', () => {
+  const G5 = { string: 2, fret: 5 };
+
+  it('nextWithNote cycles the three C Triads through G/5 in Rung order', () => {
+    const order = rungOrder(C, 'major', STRING_SETS);
+    const seen: number[] = [];
+    let cur = 0;
+    for (let i = 0; i < 4; i++) {
+      cur = nextWithNote(order, cur, G5)!;
+      seen.push(cur);
+    }
+    expect(seen).toEqual([5, 6, 7, 5]);
+    expect(seen.map((k) => `${order[k].set.id} ${frets(order[k])}`)).toEqual([
+      'ADG 7-5-5',
+      'DGB 5-5-5',
+      'GBe 5-5-3',
+      'ADG 7-5-5',
+    ]);
+  });
+
+  it('nextWithNote starts after the current Triad', () => {
+    const order = rungOrder(C, 'major', STRING_SETS);
+    expect(`${order[5].set.id} ${frets(order[5])}`).toBe('ADG 7-5-5');
+    expect(nextWithNote(order, 5, G5)).toBe(6);
+  });
+
+  it('nextWithNote returns the current Triad when it is the only match', () => {
+    const order = rungOrder(C, 'major', [set('GBe')]);
+    const only = order.findIndex((t) => frets(t) === '5-5-3');
+    expect(only).toBeGreaterThanOrEqual(0);
+    expect(nextWithNote(order, only, G5)).toBe(only);
+  });
+
+  it('nextWithNote returns null when no Triad contains the note', () => {
+    const order = rungOrder(C, 'major', STRING_SETS);
+    // G string fret 1 is G#, not a C major tone.
+    expect(nextWithNote(order, 0, { string: 2, fret: 1 })).toBeNull();
+    // The low E string is not on any set but E-A-D; a string outside the chosen sets never matches.
+    expect(nextWithNote(rungOrder(C, 'major', [set('GBe')]), 0, { string: 5, fret: 3 })).toBeNull();
   });
 });
 
