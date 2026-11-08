@@ -10,6 +10,7 @@ import { deleteProgression, loadSaved, saveProgression, type SavedProgression } 
 import { readTriadsQuery, writeTriadsQuery } from '../lib/triadsUrl';
 import {
   STRING_SETS,
+  anchorForClick,
   anchoredPath,
   chordPentatonic,
   chordScale,
@@ -72,7 +73,7 @@ export interface ChangesState {
   preset: string | null;
   /** Soloing overlay of the current chord (the two switches are exclusive). */
   overlay: Overlay;
-  /** Show the current chord's other tones on the neck (the switch arrives with the dot click). */
+  /** Show the current chord's tones faint on the neck; off also disables anchoring from the neck. */
   tones: boolean;
 }
 export type Overlay = 'none' | 'penta' | 'scale';
@@ -102,6 +103,8 @@ const OVERLAY_OP = 0.22;
 const OVERLAY_R = 7.5;
 const OVERLAY_ROOT_OP = 0.35;
 const OVERLAY_ROOT_R = 9;
+/** Faint chord tones in Chord changes: explicit, so they stay readable next to an overlay. */
+const TONES_OP = 0.4;
 const sameTriad = (a: Triad, b: Triad) => a.set.id === b.set.id && a.frets.every((f, i) => f === b.frets[i]);
 const sameChords = (a: readonly PathChord[], b: readonly PathChord[]) =>
   a.length === b.length && a.every((c, i) => c.root === b[i].root && c.quality === b[i].quality);
@@ -362,14 +365,28 @@ export function TriadsExplorer({ t }: TriadsExplorerProps) {
     const scale = chordScale(curChord, prog.key);
     const overlayNotes: ScaleNote[] =
       ch.overlay === 'penta' ? chordPentatonic(curChord) : ch.overlay === 'scale' ? scale.notes : [];
-    // The overlay on the whole neck, under the Triads: cells a Triad of the path sits on are left to the Triad.
     const triadCell = (string: number, fret: number) =>
       onCurrent({ string, fret }) || dashed.has(`${string}:${fret}`);
+    // The current chord's tones faint on the whole neck (switch on), except on cells of the path.
+    const tones: FretDot[] = [];
+    const toneCells = new Set<string>();
+    if (ch.tones) {
+      TUNING.forEach((s, string) => {
+        for (let fret = 0; fret <= MAX_FRET; fret++) {
+          const r = role(mod12(s.pc + fret - curChord.root), curChord.quality);
+          if (!r || triadCell(string, fret)) continue;
+          toneCells.add(`${string}:${fret}`);
+          tones.push({ string, fret, label: r, color: curColor, variant: 'outline', opacity: TONES_OP, clickable: true });
+        }
+      });
+    }
+    // The overlay on the whole neck, under the Triads: cells a Triad of the path or a chord tone sits on
+    // are left to that dot.
     const overlay: FretDot[] = [];
     TUNING.forEach((s, string) => {
       for (let fret = 0; fret <= MAX_FRET; fret++) {
         const note = overlayNotes.find((x) => x.pc === mod12(s.pc + fret));
-        if (!note || triadCell(string, fret)) continue;
+        if (!note || triadCell(string, fret) || toneCells.has(`${string}:${fret}`)) continue;
         const root = note.label === 'R';
         overlay.push({
           string,
@@ -386,9 +403,35 @@ export function TriadsExplorer({ t }: TriadsExplorerProps) {
     const toggleOverlay = (o: Exclude<Overlay, 'none'>) => patchCh({ overlay: ch.overlay === o ? 'none' : o });
     const dots: FretDot[] = [
       ...overlay,
-      ...dashed.values(),
-      ...curCells.map((c, k) => ({ ...c, label: cur.roles[k], color: curColor, variant: 'filled' as const, ring: cur.roles[k] === 'R' })),
+      ...tones,
+      ...[...dashed.values()].map((d) => ({ ...d, clickable: true })),
+      // The current Triad anchors from the neck, so it is clickable only while the tones show.
+      ...curCells.map((c, k) => ({
+        ...c,
+        label: cur.roles[k],
+        color: curColor,
+        variant: 'filled' as const,
+        ring: cur.roles[k] === 'R',
+        clickable: ch.tones,
+      })),
     ];
+    const onDotClick = (string: number, fret: number) => {
+      const c = { string, fret };
+      if (onCurrent(c) || toneCells.has(`${string}:${fret}`)) {
+        // A faint tone or the current Triad: anchor the path on the current chord's Triad holding the note.
+        const a = anchorForClick(curChord, ch.set, cur, c);
+        if (a) patchCh({ set: a.set, anchor: { at: idx, start: a.start } });
+        return;
+      }
+      // A dashed dot: the first chord after the current one (wrapping) whose path Triad sits there.
+      for (let k = 1; k < path.length; k++) {
+        const j = (idx + k) % path.length;
+        if (cellsOf(path[j]).some((x) => x.string === string && x.fret === fret)) {
+          patchCh({ idx: j });
+          return;
+        }
+      }
+    };
     const paths: FretPath[] = [
       ...others.map(({ tr, i }) => ({ cells: cellsOf(tr) as FretPath['cells'], color: orderColor(i), dashed: true })),
       { cells: curCells as FretPath['cells'], color: curColor },
@@ -493,6 +536,7 @@ export function TriadsExplorer({ t }: TriadsExplorerProps) {
             chip(format(t2.scale, { root: rootName, mode: t2.scaleModes[scale.mode] }), ch.overlay === 'scale', () =>
               toggleOverlay('scale'),
             ),
+            chip(t.chordTones, ch.tones, () => patchCh({ tones: !ch.tones })),
           ])}
         </div>
 
@@ -547,6 +591,7 @@ export function TriadsExplorer({ t }: TriadsExplorerProps) {
               frets={MAX_FRET}
               dots={dots}
               paths={paths}
+              onDotClick={onDotClick}
               ariaLabel={format(t2.boardAria, { names: names.join(' '), set: set.label, name: curName })}
             />
           </div>

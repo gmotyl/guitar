@@ -506,7 +506,8 @@ describe('TriadsExplorer — Chord changes mode', () => {
     expect(cur.map((d) => d.querySelector('[data-role="ring"]') !== null)).toEqual([false, false, true]);
     // B 4-4-2, C 5-5-3, Cm 5-4-3 dashed (cells under the current Triad stay filled).
     expect(dashedDots(container).map(cell).sort()).toEqual(['0:2', '1:4', '1:5', '2:5']);
-    expect(dots(container)).toHaveLength(7);
+    // Besides the faint chord tones (solid outlines), the path is all there is.
+    expect(dots(container).filter((d) => isDashed(d) || fillOf(d) !== 'var(--card)')).toHaveLength(7);
     const paths = triadPaths(container);
     expect(paths.map((p) => p.getAttribute('stroke'))).toEqual(['var(--k1)', 'var(--k2)', 'var(--k3)', 'var(--k0)']);
     const op = paths.map((p) => Number(p.getAttribute('opacity')));
@@ -726,7 +727,9 @@ describe('TriadsExplorer — Chord changes mode', () => {
     expect(field().value).toBe('G♭ B♭ B Bm');
     expect(tileNames()).toBe('G♭ B♭ B Bm');
     expect(text(line(container))).toBe('Numbery: 1 3 4 4- · tonacja rozpoznana: G♭-dur');
-    expect(buttons('Gryf').map(text)).toEqual(['pentatonika akordu (G♭ durowa)', 'skala: G♭ jońska']);
+    expect(buttons('Gryf').map(text)).toEqual([
+      'pentatonika akordu (G♭ durowa)', 'skala: G♭ jońska', 'pokaż pozostałe dźwięki akordu',
+    ]);
     expect(nowName(container)).toMatch(/· G♭(\/[A-G]♭)?$/);
     cleanup();
     history.replaceState(null, '', '/');
@@ -816,7 +819,10 @@ const overlayDots = (c: Element) => dots(c).filter((d) => d.getAttribute('data-g
 const triadDots = (c: Element) => dots(c).filter((d) => d.getAttribute('data-group') !== 'overlay');
 const radius = (d: Element) => Number(d.querySelector('circle')!.getAttribute('r'));
 const opacity = (d: Element) => Number(d.getAttribute('opacity') ?? '1');
-const switches = () => buttons('Gryf');
+/** The two overlay switches (the Gryf row also holds the chord tones switch, last). */
+const switches = () => buttons('Gryf').slice(0, 2);
+/** These overlay tests look at every overlay note, so they turn the chord tones off first. */
+const tonesOff = () => fireEvent.click(buttons('Gryf')[2]);
 const pentaSwitch = () => switches()[0];
 const scaleSwitch = () => switches()[1];
 const isOn = (b: Element) => b.getAttribute('aria-pressed') === 'true';
@@ -846,12 +852,13 @@ describe('TriadsExplorer — soloing overlays', () => {
     expect(overlayDots(container)).toHaveLength(0);
     cleanup();
     openChanges('en');
-    expect(buttons('Neck').map(text)).toEqual(['chord pentatonic (G major)', 'scale: G Ionian']);
-    expect(buttons('Neck').map(isOn)).toEqual([false, false]);
+    expect(buttons('Neck').map(text)).toEqual(['chord pentatonic (G major)', 'scale: G Ionian', 'show other chord tones']);
+    expect(buttons('Neck').map(isOn)).toEqual([false, false, true]);
   });
 
   it('the Chord pentatonic is faint with a stronger root', () => {
     const { container } = openChanges();
+    tonesOff();
     next(); // Creep: current B
     expect(text(pentaSwitch())).toBe('pentatonika akordu (B durowa)');
     fireEvent.click(pentaSwitch());
@@ -889,6 +896,7 @@ describe('TriadsExplorer — soloing overlays', () => {
 
   it('the chord scale names its mode', () => {
     const { container } = openChanges();
+    tonesOff();
     fireEvent.change(songSelect(), { target: { value: 'wishYouWereHere' } }); // C D Am G in G
     expect(pressed('Tonacja')).toEqual(['G']);
     pickTile(2);
@@ -967,6 +975,131 @@ describe('TriadsExplorer — soloing overlays', () => {
     expect(text(scaleSwitch())).toBe('skala: C lidyjska');
     cells = new Set(triadDots(container).map(cell));
     expect(overlayMap(container)).toEqual(expectedOverlay(0, [0, 2, 4, 6, 7, 9, 11], cells));
+  });
+});
+
+// Chord changes dot click helpers.
+const TONES = 'pokaż pozostałe dźwięki akordu';
+const tonesSwitch = () => buttons('Gryf').find((b) => text(b) === TONES)!;
+/** Faint chord tones: outlined, solid (not dashed), not part of an overlay. */
+const faintDots = (c: Element) =>
+  outlineDots(c).filter((d) => !isDashed(d) && d.getAttribute('data-group') !== 'overlay');
+/** Frets of every chord of a 4-chord path, read by stepping Next round the progression. */
+const pathFrets = (c: Element) => {
+  const out: string[] = [];
+  for (let i = 0; i < 4; i++) {
+    out.push(nowFrets(c));
+    next();
+  }
+  return out;
+};
+
+describe('TriadsExplorer — dot click in Chord changes mode', () => {
+  afterEach(cleanup);
+
+  it('Chord changes shows faint chord tones by default', () => {
+    const { container } = openChanges();
+    expect(isOn(tonesSwitch())).toBe(true);
+    // Current G (1.): every G, B, D on frets 0–15 except the path cells, faint in --k0 with its Role.
+    const pathCells = new Set([...solidFilled(container), ...dashedDots(container)].map(cell));
+    const faint = faintDots(container);
+    expect(new Map(faint.map((d) => [cell(d), label(d)]))).toEqual(expectedOverlay(7, [0, 4, 7], pathCells));
+    for (const d of faint) {
+      expect(d.querySelector('circle')!.getAttribute('stroke')).toBe('var(--k0)');
+      expect(opacity(d)).toBeCloseTo(0.4);
+      expect((d as SVGElement).style.cursor).toBe('pointer');
+    }
+    expect(faint.some((d) => pathCells.has(cell(d)))).toBe(false);
+    // One dot per cell.
+    expect(new Set(dots(container).map(cell)).size).toBe(dots(container).length);
+    // They follow the current chord: B (2.) → B, D♯, F♯ in --k1.
+    next();
+    const pathB = new Set([...solidFilled(container), ...dashedDots(container)].map(cell));
+    expect(new Map(faintDots(container).map((d) => [cell(d), label(d)]))).toEqual(
+      expectedOverlay(11, [0, 4, 7], pathB),
+    );
+    expect(faintDots(container).every((d) => d.querySelector('circle')!.getAttribute('stroke') === 'var(--k1)')).toBe(true);
+  });
+
+  it('tones switch off hides them and writes tones=off', () => {
+    const { container } = openChanges();
+    fireEvent.click(tonesSwitch());
+    expect(isOn(tonesSwitch())).toBe(false);
+    expect(faintDots(container)).toHaveLength(0);
+    expect(location.search).toContain('tones=off');
+    // Neck anchoring is off with the tones: the current Triad is not clickable, dashed dots still are.
+    expect(boardDot(container, 2, 4)!.querySelector('[data-role="dot-hit"]')).toBeNull();
+    clickDot(container, 2, 5); // C and Cm share it; C (3.) is the first after G
+    expect(currentTile()).toBe(2);
+    fireEvent.click(tonesSwitch());
+    expect(faintDots(container).length).toBeGreaterThan(0);
+    expect(location.search).not.toContain('tones=');
+  });
+
+  it('clicking a faint tone anchors the path on the current set', () => {
+    const { container } = openChanges();
+    fireEvent.click(tiles()[2]);
+    expect(faintDots(container).map(cell)).toContain('1:13');
+    clickDot(container, 1, 13);
+    expect(currentTile()).toBe(2);
+    expect(nowFrets(container)).toBe('12-13-12');
+    expect(pressed('Struny')).toEqual(['G-B-e']);
+    fireEvent.click(tiles()[0]);
+    expect(pathFrets(container)).toEqual(['12-12-10', '11-12-11', '12-13-12', '12-13-11']);
+    expect(location.search).toBe('?mode=changes&at=2&start=3');
+  });
+
+  it('clicking the current Triad moves to the next String set', () => {
+    const { container } = openChanges();
+    fireEvent.click(tiles()[2]);
+    expect(nowFrets(container)).toBe('5-5-3');
+    clickDot(container, 2, 5);
+    expect(pressed('Struny')).toEqual(['A-D-G']);
+    expect(currentTile()).toBe(2);
+    expect(nowFrets(container)).toBe('7-5-5');
+    fireEvent.click(tiles()[0]);
+    expect(pathFrets(container)).toEqual(['5-5-4', '6-4-4', '7-5-5', '6-5-5']);
+  });
+
+  it('clicking a string outside the set picks the lowest set', () => {
+    const { container } = openChanges();
+    expect(faintDots(container).map(cell)).toContain('4:10');
+    clickDot(container, 4, 10);
+    expect(pressed('Struny')).toEqual(['E-A-D']);
+    expect(currentTile()).toBe(0);
+    expect(nowName(container)).toBe('1. 1 · G/D');
+    expect(nowFrets(container)).toBe('10-10-9');
+  });
+
+  it('clicking a dashed dot makes that chord current', () => {
+    const { container } = openChanges();
+    typeProg('G Em D Cm');
+    expect(currentTile()).toBe(0);
+    const before = pathFrets(container);
+    // G string fret 5 belongs to the Cm Triad 5-4-3 only.
+    expect(isDashed(boardDot(container, 2, 5)!)).toBe(true);
+    clickDot(container, 2, 5);
+    expect(currentTile()).toBe(3);
+    expect(nowName(container)).toMatch(/^4\. /);
+    fireEvent.click(tiles()[0]);
+    expect(pathFrets(container)).toEqual(before);
+    // A cell two dashed Triads share goes to the first of them after the current chord: B (2.) in Creep.
+    typeProg('G B C Cm');
+    clickDot(container, 1, 4);
+    expect(currentTile()).toBe(1);
+  });
+
+  it('chord tones win over overlay dots', () => {
+    const { container } = openChanges();
+    next(); // B
+    fireEvent.click(pentaSwitch());
+    // B, D♯, F♯ are faint chord tones; only C♯ (2) and G♯ (6) are overlay dots.
+    expect(new Set(faintDots(container).map(label))).toEqual(new Set(['R', '3', '5']));
+    expect(new Set(overlayDots(container).map(label))).toEqual(new Set(['2', '6']));
+    expect(new Set(dots(container).map(cell)).size).toBe(dots(container).length);
+    // Switched off, the overlay shows all its notes again.
+    fireEvent.click(tonesSwitch());
+    expect(new Set(overlayDots(container).map(label))).toEqual(new Set(['R', '2', '3', '5', '6']));
   });
 });
 
